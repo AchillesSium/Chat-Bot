@@ -29,6 +29,14 @@ Endpoints:
     ]
   }
 
+/skills
+  [
+    {
+      "employeeId": int,
+      "skills": [str],
+    }
+  ]
+
 
 Allocation
   {
@@ -66,6 +74,13 @@ def user_allocations(user_id):
         "employeeId": 1,
         "allocations": data,
     }
+
+
+@app.route("/skills")
+def skills():
+    raw = source.skills_by_user()
+    data = [{"employeeId": user, "skills": skills} for user, skills in raw.items()]
+    return jsonify(data)
 
 
 @app.route("/allocations")

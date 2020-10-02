@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 
 # the parent of the git repository's root
-DATA_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
+DATA_DIR = Path(__file__).resolve(strict=True).parent.parent.parent.parent
 PEOPLE_FILE = DATA_DIR / "people-simple.json"
 ALLOCATION_FILE = DATA_DIR / "allocation.json"
 
@@ -58,6 +58,9 @@ class Datasource:
 
     def user_allocations(self, user_id):
         return self.allocations.get(user_id)
+
+    def skills_by_user(self):
+        return {user: info["skills"] for user, info in self.users.items()}
 
     def allocations_within(self, start, end):
         start = parse_year_week(start)
