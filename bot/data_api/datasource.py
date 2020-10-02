@@ -54,12 +54,21 @@ class Datasource:
         self.allocations = parse_allocations(ALLOCATION_FILE)
 
     def user_info(self, user_id):
+        """
+        returns dict: {
+            "employeeId": int,
+            "role": str,
+            "skills": [str],
+            "wishes": [str],
+        }
+        """
         return self.users.get(user_id)
 
     def user_allocations(self, user_id):
         return self.allocations.get(user_id)
 
     def skills_by_user(self):
+        """returns dict: {employeeId: [str]}"""
         return {user: info["skills"] for user, info in self.users.items()}
 
     def allocations_within(self, start, end):
