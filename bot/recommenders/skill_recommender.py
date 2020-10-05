@@ -141,7 +141,7 @@ class SkillExtractor:
         return result
 
 
-class SkillRecommender:
+class SkillRecommenderCF:
     def __init__(self, ds: Union[Datasource, None] = None):
         if ds is None:
             ds = Datasource()
@@ -153,11 +153,17 @@ class SkillRecommender:
 
         raw_skills_by_user = clean_skills(self.source.skills_by_user())
 
-        employee_skills = self.skill_extractor.extract_skill_features(
-            raw_skills_by_user
-        )
+        user_skills = self.skill_extractor.extract_skill_features(raw_skills_by_user)
 
         pass
+
+    def recommend_skills_to_user(self, employee_id: int) -> MutableSequence[str]:
+        """ Recommend skills to user based on CF
+
+        @param employee_id: ID of employee for whom to recommend skills
+        @return: List of skills recommended to user
+        """
+        ...
 
 
 if __name__ == "__main__":
