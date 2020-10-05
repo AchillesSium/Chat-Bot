@@ -1,0 +1,3 @@
+skill_features:
+  feature_type: 'noun' # One of 'word', 'skill', 'noun' (for nounphrase)
+  use_lowercase: Yes
