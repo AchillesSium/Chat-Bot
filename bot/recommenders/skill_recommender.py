@@ -168,6 +168,6 @@ class SkillRecommenderCF:
 
 if __name__ == "__main__":
     # For debugging
-    rec = SkillRecommender()
+    rec = SkillRecommenderCF()
 
     print("Breakpoint here")
