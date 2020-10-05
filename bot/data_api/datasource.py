@@ -13,6 +13,12 @@ YearWeek = namedtuple("YearWeek", ("year", "week"))
 
 
 def parse_year_week(string):
+    """ Parse year-week pair into a named YearWeek tuple.
+    Yearweek string is expected to be in yyyy-Www
+
+    @param string: Year-week pair as string
+    @return: Year-week pair as YearWeek
+    """
     year, sep, week = string.partition("-W")
     if not sep:
         raise ValueError("invalid format")
@@ -20,12 +26,24 @@ def parse_year_week(string):
 
 
 def parse_users(path: Path):
-    # assuming one entry per line
+    """ Parse user data json to json.
+    Assumes the data file to be as given by customer, i.e. unmodified.
+    That is,
+
+    @param path: User data file path
+    @return: User data as JSON
+    """
     users = {}
-    with path.open() as f:
+    with path.open(encoding="utf-8") as f:
+        user_dict = ""
         for line in f:
-            user = json.loads(line)
-            users[user["employeeId"]] = user
+            if line.startswith("}"):
+                user_dict += "}"
+                user = json.loads(user_dict)
+                users[user["employeeId"]] = user
+                user_dict = ""
+            else:
+                user_dict += line
     return users
 
 
@@ -89,3 +107,10 @@ class Datasource:
                     {"employeeId": user, "allocations": matching,}
                 )
         return result
+
+
+if __name__ == "__main__":
+    # For debugging
+    ds = Datasource()
+
+    print("Breakpoint here")
