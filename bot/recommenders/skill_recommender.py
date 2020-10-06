@@ -293,6 +293,21 @@ class SkillRecommenderCF:
         if self.config["normalize_skill_vectors"]:
             self._normalize_skill_vectors()
 
+    def _eval_skill_neighbours(self):
+        neigh_size = self.config["neighbourhood"]["neighbourhood_size"]
+
+        data_neighbours = pd.DataFrame(
+            index=self.skill_similarity.columns, columns=range(1, neigh_size + 1)
+        )
+        for i in tqdm(range(0, len(self.skill_similarity.columns))):
+            data_neighbours.iloc[i, :neigh_size] = (
+                self.skill_similarity.iloc[:, i]
+                .sort_values(ascending=False)[:neigh_size]
+                .index
+            )
+
+        self.skill_neighbours = data_neighbours
+
     def _get_most_similar(self, recommended_skills, user_skills, sz: int):
         """ Get the list of "most similar" skills in user_skills in relation to recommended_skills
 
@@ -309,6 +324,7 @@ class SkillRecommenderCF:
         return list(similarities.nlargest(sz).index)
 
     def initialize_recommender(self):
+        print("Initializing recommender")
         self.config = read_yaml(Path("./config/skill_recommender.yaml"))
 
         source = Datasource()
@@ -325,6 +341,12 @@ class SkillRecommenderCF:
         self._make_skill_index(user_skills)
         print("Constructing skill similarity matrix")
         self.skill_similarity = similarity_evaluator(self.skill_index)
+
+        if self.config["neighbourhood"]["use_neighbourhood"]:
+            print("Evaluating skill neighbours")
+            self._eval_skill_neighbours()
+
+        print("Init done!")
 
     def clear_recommendation_history(self):
         for user_id in self.recommendation_history:
@@ -343,20 +365,38 @@ class SkillRecommenderCF:
         @param nb_most_similar: How many "most similar" skills of the user to list
         @return: List of skills recommended to user, their similarities and what they are most similar to
         """
-        if self.config["neighbourhood_size"] < 1:
-            user_skills = [
-                skill for skill, sc in self.skill_index.loc[user_id].items() if sc > 0
-            ]
-            user_skill_vector = self.skill_index.loc[user_id]
+        user_skills = [
+            skill for skill, sc in self.skill_index.loc[user_id].items() if sc > 0
+        ]
+        user_skill_vector = self.skill_index.loc[user_id]
 
+        if not self.config["neighbourhood"]["use_neighbourhood"]:
             score = self.skill_similarity.dot(user_skill_vector).div(
                 self.skill_similarity.sum(axis=1)
             )
-            # Drop already-known skills
-            score = score.drop(user_skills)
-            recommendations = score.nlargest(nb_recommendations)
         else:
-            raise AttributeError("Neighbourhood has not been implemented yet")
+            # Construct the neighbourhood from the most similar skills to the
+            # ones the user already has.
+            most_similar_to_likes = self.skill_neighbours.loc[user_skills]
+            similar_list = most_similar_to_likes.values.tolist()
+            similar_list = list(
+                set([item for sublist in similar_list for item in sublist])
+            )
+            neighbourhood = self.skill_similarity[similar_list].loc[similar_list]
+
+            # A user vector containing only the neighbourhood items and
+            # the known user likes.
+            user_vector = self.skill_index.loc[user_id].loc[similar_list]
+
+            score = neighbourhood.dot(user_vector).div(neighbourhood.sum(axis=1))
+
+        # Drop already-known skills
+        score = score.drop(user_skills)
+        # Drop already-recommended skills
+        score = score.drop(self.recommendation_history[user_id])
+
+        # Get top recommendations
+        recommendations = score.nlargest(nb_recommendations)
 
         # Get recommended skills, similarities and most similar
         rec_skills = list(recommendations.index)
