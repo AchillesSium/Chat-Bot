@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
-from collections import Counter
+from collections import Counter, defaultdict
 import numpy as np
-from typing import Union, MutableMapping, Any, NewType, MutableSequence, Set
+from typing import Optional, MutableMapping, Any, NewType, MutableSequence, Set
 
 import yaml
 import pandas as pd
@@ -14,7 +14,7 @@ from scipy import sparse
 # Not sure this will be correct always
 from bot.data_api.datasource import Datasource
 
-SkillData = NewType("SkillData", MutableMapping[str, Union[MutableSequence[str], None]])
+SkillData = NewType("SkillData", MutableMapping[str, Optional[MutableSequence[str]]])
 YAML = NewType("YAML", MutableMapping[str, Any])
 
 
@@ -227,7 +227,7 @@ class SkillRecommenderCF:
         self.initialize_recommender()
 
         # Keep track of recommendations so as to not recommend the same thing multiple times
-        self.recommendation_history = {u: set() for u in self.skill_index.index}
+        self.recommendation_history = defaultdict(set)
 
     def _normalize_skill_vectors(self):
         """ Normalize user skill vectors in skill index to unit vectors
@@ -352,8 +352,7 @@ class SkillRecommenderCF:
         print("Init done!")
 
     def clear_recommendation_history(self):
-        for user_id in self.recommendation_history:
-            self.recommendation_history[user_id] = set()
+        self.recommendation_history.clear()
 
     def update_recommendation_history(self, user_id: int, skill: str):
         self.recommendation_history[user_id].add(skill)
