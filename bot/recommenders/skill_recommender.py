@@ -31,7 +31,8 @@ def read_yaml(path: Path) -> YAML:
     @param path: yaml file path
     @return: yaml dict
     """
-    return yaml.safe_load(path.open("r"))
+    with path.open("r") as f:
+        return yaml.safe_load(f)
 
 
 def clean_one(sentence: str):
@@ -325,7 +326,9 @@ class SkillRecommenderCF:
 
     def initialize_recommender(self):
         print("Initializing recommender")
-        self.config = read_yaml(Path("./config/skill_recommender.yaml"))
+        self.config = read_yaml(
+            Path(__file__).parent / "config" / "skill_recommender.yaml"
+        )
 
         source = Datasource()
         skill_extractor = SkillExtractor(self.config["skill_features"])
