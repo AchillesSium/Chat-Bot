@@ -7,6 +7,8 @@ import yaml
 import pandas as pd
 from tqdm import tqdm
 import nltk
+from sklearn.metrics.pairwise import cosine_similarity
+from scipy import sparse
 
 # Not sure this will be correct always
 from bot.data_api.datasource import Datasource
@@ -188,23 +190,48 @@ class SkillExtractor:
         return result
 
 
-class SkillRecommenderCF:
-    def __init__(self, ds: Union[Datasource, None] = None):
-        if ds is None:
-            ds = Datasource()
+class SimilarityClac:
+    def __init__(self, metric_name: str):
+        self.metric = metric_name.lower()
 
+        if self.metric.startswith("cosine"):
+            self._similarity_func = self._cosine_similarity
+        else:
+            raise AttributeError(
+                f"Unknown similarity metric {metric_name}!\nCurrently implemented:\n\tcosine similarity\n."
+            )
+
+    def __call__(self, skill_data):
+        return self._similarity_func(skill_data)
+
+    @staticmethod
+    def _cosine_similarity(skill_data):
+        """Calculate the column-wise cosine similarity for a sparse
+            matrix. Return a new dataframe matrix with similarities.
+        """
+        data_sparse = sparse.csr_matrix(skill_data)
+        similarities = cosine_similarity(data_sparse.transpose())
+
+        sim = pd.DataFrame(
+            data=similarities, index=skill_data.columns, columns=skill_data.columns
+        )
+        return sim
+
+
+class SkillRecommenderCF:
+    def __init__(self):
         self.config = read_yaml(Path("./config/skill_recommender.yaml"))
 
-        self.source = ds
+        self.source = Datasource()
         self.skill_extractor = SkillExtractor(self.config["skill_features"])
+        self.similarity_evaluator = SimilarityClac(self.config["similarity_metric"])
 
         raw_skills_by_user = clean_skills(self.source.skills_by_user())
 
         user_skills = self.skill_extractor.extract_skill_features(raw_skills_by_user)
 
         self._make_skill_index(user_skills)
-
-        pass
+        self.skill_similarity = self.similarity_evaluator(self.skill_index)
 
     def _normalize_skill_vectors(self):
         """ Normalize user skill vectors in skill index to unit vectors
