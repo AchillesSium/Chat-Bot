@@ -98,14 +98,20 @@ class SkillExtractor:
         @return:
         """
         skill_feat_type = self.config["feature_type"]
-        if skill_feat_type.lower().startswith("noun"):
-            feat_func = self._extract_noun_phrases
-        elif skill_feat_type.lower().startswith("skill"):
-            feat_func = self._extract_skills
-        elif skill_feat_type.lower().startswith("word"):
-            feat_func = self._extract_words
+        feat_functions = {
+            "noun": self._extract_noun_phrases,
+            "skill": self._extract_skills,
+            "word": self._extract_words,
+        }
+        # Python dictionaries guarantee insertion ordering starting from 3.7
+        for key, feat_func in feat_functions.items():
+            if skill_feat_type.lower().startswith(key):
+                break
         else:
-            raise AttributeError(f"Skill feature {skill_feat_type} not recognized!")
+            available = ", ".join(feat_functions)
+            raise AttributeError(
+                f"Skill feature {skill_feat_type!r} not recognized! Available options are: {available}"
+            )
 
         skill_features = {}
         for employee_id, skills in data.items():
@@ -117,35 +123,28 @@ class SkillExtractor:
         return skill_features
 
     def _extract_words(self, skills: MutableSequence[str]):
+        ignored = [
+            "a",
+            "an",
+            "the",
+            "i",
+            "of",
+            "at",
+            "in",
+            "we",
+            "implementation",
+            "development",
+            "for",
+            "with",
+        ]
+
         result = []
         for s in skills:
             if self.config["use_lowercase"]:
                 words = s.lower().split()
             else:
                 words = s.split()
-            result.extend(words)
-
-        to_del = []
-        for i, s in enumerate(result):
-            if s.lower() in [
-                "a",
-                "an",
-                "the",
-                "i",
-                "of",
-                "at",
-                "in",
-                "we",
-                "implemetation",
-                "development",
-                "for",
-                "with",
-            ]:
-                to_del.append(i)
-
-        to_del.reverse()
-        for i in to_del:
-            del result[i]
+            result.extend(w for w in words if w.lower() not in ignored)
 
         return result
 
