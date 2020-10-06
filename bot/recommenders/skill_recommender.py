@@ -165,7 +165,7 @@ class SkillExtractor:
 
     @staticmethod
     def _join_parse_tree(the_tree):
-        return " ".join([i[0] for i in the_tree])
+        return " ".join(i[0] for i in the_tree)
 
     def _extract_phrases(self, skill: str):
         phrases = []
@@ -245,14 +245,18 @@ class SkillRecommenderCF:
         """
         all_skills = set()
         for _, skills in user_skills.items():
-            all_skills.update(set(skills))
+            if skills:
+                all_skills.update(skills)
 
         # Ignore rare skills
         rarest_allowed = self.config["rarest_allowed_skill"]
         if rarest_allowed > 1:
             skills_counter = Counter()
             for _, skills in user_skills.items():
-                skills_counter.update(set(skills))
+                if skills:
+                    # constructing the set is necessary, unless the skills can
+                    # be guaranteed to be unique
+                    skills_counter.update(set(skills))
 
             for skill, count in skills_counter.items():
                 if count < rarest_allowed:
@@ -269,13 +273,14 @@ class SkillRecommenderCF:
         """
         all_skills = self._get_rarity_filtered_skills(user_skills)
 
-        sorted_skills = sorted(list(all_skills))
-        sorted_users = sorted(list(user_skills.keys()))
+        sorted_skills = sorted(all_skills)
+        sorted_users = sorted(user_skills)
 
         skill_counters = {}
         for user, skills in user_skills.items():
             cnt = Counter()
-            cnt.update([s for s in skills if s in all_skills])
+            if skills is not None:
+                cnt.update(s for s in skills if s in all_skills)
             skill_counters[user] = cnt
 
         data_dict = {}
@@ -381,7 +386,7 @@ class SkillRecommenderCF:
             most_similar_to_likes = self.skill_neighbours.loc[user_skills]
             similar_list = most_similar_to_likes.values.tolist()
             similar_list = list(
-                set([item for sublist in similar_list for item in sublist])
+                set(item for sublist in similar_list for item in sublist)
             )
             neighbourhood = self.skill_similarity[similar_list].loc[similar_list]
 
@@ -401,7 +406,7 @@ class SkillRecommenderCF:
 
         # Get recommended skills, similarities and most similar
         rec_skills = list(recommendations.index)
-        rec_similarities = list(list(recommendations))
+        rec_similarities = list(recommendations)
         rec_most_similar = self._get_most_similar(
             rec_skills, user_skills, nb_most_similar
         )
