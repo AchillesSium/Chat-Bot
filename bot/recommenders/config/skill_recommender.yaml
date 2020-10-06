@@ -1,3 +1,7 @@
 skill_features:
-  feature_type: 'noun' # One of 'word', 'skill', 'noun' (for nounphrase)
+  feature_type: 'word' # One of 'word', 'skill', 'noun' (for nounphrase)
   use_lowercase: Yes
+
+similarity_metric: 'cosine' # One of 'cosine', ...
+normalize_skill_vectors: Yes
+rarest_allowed_skill: 1 # E.g. if == 3, skills with less than 3 employees will be ignored. <= 1 to not ignore anything

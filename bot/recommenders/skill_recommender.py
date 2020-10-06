@@ -1,5 +1,7 @@
 from pathlib import Path
-from typing import Union, MutableMapping, Any, NewType, MutableSequence
+from collections import Counter, namedtuple
+import numpy as np
+from typing import Union, MutableMapping, Any, NewType, MutableSequence, Set
 
 import yaml
 import pandas as pd
@@ -11,6 +13,10 @@ from bot.data_api.datasource import Datasource
 
 SkillData = NewType("SkillData", MutableMapping[str, Union[MutableSequence[str], None]])
 YAML = NewType("YAML", MutableMapping[str, Any])
+
+SkillRecommendation = namedtuple(
+    "SkillRecommendation", ("recommendation_list", "similarities", "most_similar_to")
+)
 
 
 def read_yaml(path: Path) -> YAML:
@@ -31,7 +37,26 @@ def clean_one(sentence: str):
     :return: Cleaned sentence
     :rtype: str
     """
-    sentence = sentence.replace("\u2022", "")
+    to_remove = [
+        "\u2022",
+        "●",
+        '"',
+        "'",
+        "“",
+        "”",
+        "♡",
+        "+",
+        "-",
+        "_",
+        ".",
+        ",",
+        ":",
+        ";",
+        "⁃",
+    ]
+
+    for i in to_remove:
+        sentence = sentence.replace(i, "")
 
     return sentence.strip()
 
@@ -94,6 +119,28 @@ class SkillExtractor:
                 words = s.split()
             result.extend(words)
 
+        to_del = []
+        for i, s in enumerate(result):
+            if s.lower() in [
+                "a",
+                "an",
+                "the",
+                "i",
+                "of",
+                "at",
+                "in",
+                "we",
+                "implemetation",
+                "development",
+                "for",
+                "with",
+            ]:
+                to_del.append(i)
+
+        to_del.reverse()
+        for i in to_del:
+            del result[i]
+
         return result
 
     def _extract_skills(self, skills: MutableSequence[str]):
@@ -155,19 +202,84 @@ class SkillRecommenderCF:
 
         user_skills = self.skill_extractor.extract_skill_features(raw_skills_by_user)
 
+        self._make_skill_index(user_skills)
+
         pass
 
-    def recommend_skills_to_user(self, employee_id: int) -> MutableSequence[str]:
+    def _normalize_skill_vectors(self):
+        """ Normalize user skill vectors in skill index to unit vectors
+        This makes individual skills count less.
+        """
+        magnitude = np.sqrt(np.square(self.skill_index).sum(axis=1))
+
+        self.skill_index = self.skill_index.divide(magnitude, axis="index")
+
+    def _get_rarity_filtered_skills(self, user_skills: SkillData) -> Set[str]:
+        """ Get all skills from skills by user.
+        If needed (determined by self.config), removes rare skills.
+
+        @param user_skills: Skill list for each user
+        @return: Set of all (filtered) skills
+        """
+        all_skills = set()
+        for _, skills in user_skills.items():
+            all_skills.update(set(skills))
+
+        # Ignore rare skills
+        rarest_allowed = self.config["rarest_allowed_skill"]
+        if rarest_allowed > 1:
+            skills_counter = Counter()
+            for _, skills in user_skills.items():
+                skills_counter.update(set(skills))
+
+            for skill, count in skills_counter.items():
+                if count < rarest_allowed:
+                    all_skills.remove(skill)
+
+        return all_skills
+
+    def _make_skill_index(self, user_skills: SkillData):
+        """ Converts skills by user into pd.DataFrame
+        Also, if needed, removes rare skills and normalizes skill vectors.
+        (Determined by config)
+
+        @param user_skills: Skill list for each user
+        """
+        all_skills = self._get_rarity_filtered_skills(user_skills)
+
+        sorted_skills = sorted(list(all_skills))
+        sorted_users = sorted(list(user_skills.keys()))
+
+        skill_counters = {}
+        for user, skills in user_skills.items():
+            cnt = Counter()
+            cnt.update([s for s in skills if s in all_skills])
+            skill_counters[user] = cnt
+
+        data_dict = {}
+        for skill in sorted_skills:
+            skill_prevalence = [skill_counters[user][skill] for user in sorted_users]
+            data_dict[skill] = skill_prevalence
+
+        self.skill_index = pd.DataFrame(data_dict, index=sorted_users)
+
+        if self.config["normalize_skill_vectors"]:
+            self._normalize_skill_vectors()
+
+    def recommend_skills_to_user(self, user_id: int) -> SkillRecommendation:
         """ Recommend skills to user based on CF
 
-        @param employee_id: ID of employee for whom to recommend skills
-        @return: List of skills recommended to user
+        @param user_id: ID of employee for whom to recommend skills
+        @return: List of skills recommended to user, their similarities and what they are most similar to
         """
-        ...
+        return None
 
 
 if __name__ == "__main__":
     # For debugging
     rec = SkillRecommenderCF()
+
+    rec_for_775 = rec.recommend_skills_to_user(775)
+    print(rec_for_775)
 
     print("Breakpoint here")
