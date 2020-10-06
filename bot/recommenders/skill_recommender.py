@@ -1,5 +1,6 @@
+from dataclasses import dataclass
 from pathlib import Path
-from collections import Counter, namedtuple
+from collections import Counter
 import numpy as np
 from typing import Union, MutableMapping, Any, NewType, MutableSequence, Set
 
@@ -16,9 +17,12 @@ from bot.data_api.datasource import Datasource
 SkillData = NewType("SkillData", MutableMapping[str, Union[MutableSequence[str], None]])
 YAML = NewType("YAML", MutableMapping[str, Any])
 
-SkillRecommendation = namedtuple(
-    "SkillRecommendation", ("recommendation_list", "similarities", "most_similar_to")
-)
+
+@dataclass
+class SkillRecommendation:
+    recommendation_list: MutableSequence[str]
+    similarities: MutableSequence[float]
+    most_similar_to: MutableSequence[str]
 
 
 def read_yaml(path: Path) -> YAML:
@@ -47,7 +51,6 @@ def clean_one(sentence: str):
         "“",
         "”",
         "♡",
-        "+",
         "-",
         "_",
         ".",
@@ -220,18 +223,10 @@ class SimilarityClac:
 
 class SkillRecommenderCF:
     def __init__(self):
-        self.config = read_yaml(Path("./config/skill_recommender.yaml"))
+        self.initialize_recommender()
 
-        self.source = Datasource()
-        self.skill_extractor = SkillExtractor(self.config["skill_features"])
-        self.similarity_evaluator = SimilarityClac(self.config["similarity_metric"])
-
-        raw_skills_by_user = clean_skills(self.source.skills_by_user())
-
-        user_skills = self.skill_extractor.extract_skill_features(raw_skills_by_user)
-
-        self._make_skill_index(user_skills)
-        self.skill_similarity = self.similarity_evaluator(self.skill_index)
+        # Keep track of recommendations so as to not recommend the same thing multiple times
+        self.recommendation_history = {u: set() for u in self.skill_index.index}
 
     def _normalize_skill_vectors(self):
         """ Normalize user skill vectors in skill index to unit vectors
@@ -286,6 +281,11 @@ class SkillRecommenderCF:
         data_dict = {}
         for skill in sorted_skills:
             skill_prevalence = [skill_counters[user][skill] for user in sorted_users]
+
+            if self.config["use_binary"]:
+                # Convert e.g. [0, 0, 4, 8, 0] to [0, 0, 1, 1, 0]
+                skill_prevalence = list(np.where(np.array(skill_prevalence) > 0, 1, 0))
+
             data_dict[skill] = skill_prevalence
 
         self.skill_index = pd.DataFrame(data_dict, index=sorted_users)
@@ -293,13 +293,79 @@ class SkillRecommenderCF:
         if self.config["normalize_skill_vectors"]:
             self._normalize_skill_vectors()
 
-    def recommend_skills_to_user(self, user_id: int) -> SkillRecommendation:
+    def _get_most_similar(self, recommended_skills, user_skills, sz: int):
+        """ Get the list of "most similar" skills in user_skills in relation to recommended_skills
+
+        @param recommended_skills: Recommended skills
+        @param user_skills: User skills
+        @param sz: How many "most similar" skills to list
+        @return: List of "most similar" skills
+        """
+        similarities: pd.DataFrame = sum(
+            self.skill_similarity.loc[rec_skill].loc[user_skills]
+            for rec_skill in recommended_skills
+        )
+
+        return list(similarities.nlargest(sz).index)
+
+    def initialize_recommender(self):
+        self.config = read_yaml(Path("./config/skill_recommender.yaml"))
+
+        source = Datasource()
+        skill_extractor = SkillExtractor(self.config["skill_features"])
+        similarity_evaluator = SimilarityClac(self.config["similarity_metric"])
+
+        print("Fetching skill data")
+        raw_skills_by_user = clean_skills(source.skills_by_user())
+
+        print("Extracting skill features")
+        user_skills = skill_extractor.extract_skill_features(raw_skills_by_user)
+
+        print("Constructing skill index")
+        self._make_skill_index(user_skills)
+        print("Constructing skill similarity matrix")
+        self.skill_similarity = similarity_evaluator(self.skill_index)
+
+    def clear_recommendation_history(self):
+        for user_id in self.recommendation_history:
+            self.recommendation_history[user_id] = set()
+
+    def update_recommendation_history(self, user_id: int, skill: str):
+        self.recommendation_history[user_id].add(skill)
+
+    def recommend_skills_to_user(
+        self, user_id: int, nb_recommendations: int = 5, nb_most_similar: int = 5
+    ) -> SkillRecommendation:
         """ Recommend skills to user based on CF
 
         @param user_id: ID of employee for whom to recommend skills
+        @param nb_recommendations: How many recommendations to make
+        @param nb_most_similar: How many "most similar" skills of the user to list
         @return: List of skills recommended to user, their similarities and what they are most similar to
         """
-        return None
+        if self.config["neighbourhood_size"] < 1:
+            user_skills = [
+                skill for skill, sc in self.skill_index.loc[user_id].items() if sc > 0
+            ]
+            user_skill_vector = self.skill_index.loc[user_id]
+
+            score = self.skill_similarity.dot(user_skill_vector).div(
+                self.skill_similarity.sum(axis=1)
+            )
+            # Drop already-known skills
+            score = score.drop(user_skills)
+            recommendations = score.nlargest(nb_recommendations)
+        else:
+            raise AttributeError("Neighbourhood has not been implemented yet")
+
+        # Get recommended skills, similarities and most similar
+        rec_skills = list(recommendations.index)
+        rec_similarities = list(list(recommendations))
+        rec_most_similar = self._get_most_similar(
+            rec_skills, user_skills, nb_most_similar
+        )
+
+        return SkillRecommendation(rec_skills, rec_similarities, rec_most_similar)
 
 
 if __name__ == "__main__":
@@ -307,6 +373,6 @@ if __name__ == "__main__":
     rec = SkillRecommenderCF()
 
     rec_for_775 = rec.recommend_skills_to_user(775)
-    print(rec_for_775)
+    print(f"Recommendation for user with ID 775:\n{str(rec_for_775)}")
 
     print("Breakpoint here")
