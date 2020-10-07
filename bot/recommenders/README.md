@@ -1,4 +1,5 @@
-`skill_recommender.py`:
+`config/`: Config files for recommendations
+`skill_recommender.py`: Module for skill recommendation using collaborative filtering
 - `SkillRecommenderCF`: Collaborative filtering recommender for skills
     - `initialize_recommender()`: (Re)initialize recommender. Reads and fits data again.
     - `recommend_skills_to_user(user_id: int, skill: str)`: Adds `skill` to recommendation history of `user_id` so that it won't be recemmended again.
