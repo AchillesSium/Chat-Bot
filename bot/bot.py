@@ -20,27 +20,20 @@ class Bot:
 
     def help(self):
         return {
-            "response_type": "ephemeral",
             "text": "Example help message:\nTo enrol, send me a message like: 'enrol <employee_id>'",
         }
 
     def enrol_user(self, user_id, employee_id):
-        def response(**kw):
-            return {
-                "response_type": "ephemeral",
-                **kw,
-            }
-
         if self.data_source.user_info(employee_id) is None:
-            return response(
-                text=f"Hmm... There is no record for the employee id: {employee_id}"
-            )
+            return {
+                "text": f"Hmm... There is no record for the employee id: {employee_id}"
+            }
 
         user = User(user_id, employee_id)
         try:
             self.user_db.add_user(user)
         except KeyError:
-            return response(text="You are already enrolled!")
+            return {"text": "You are already enrolled!"}
 
         rec = self.recommender.recommend_skills_to_user(employee_id)
         skills = "\n".join(f"- {r}" for r in rec.recommendation_list)
@@ -57,7 +50,7 @@ class Bot:
                 },
             },
         ]
-        return response(blocks=blocks)
+        return {"blocks": blocks}
 
 
 class InMemoryDb:

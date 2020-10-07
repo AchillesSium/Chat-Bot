@@ -36,10 +36,16 @@ def slash_commands():
         try:
             user_id = request.form["user_id"]
             employee_id = int(request.form["text"])
-            return bot.enrol_user(user_id, employee_id)
+            return {
+                **bot.enrol_user(user_id, employee_id),
+                "response_type": "ephemeral",
+            }
         except Exception as e:
             print(f"error: {e!r}")
-            return bot.help()
+            return {
+                **bot.help(),
+                "response_type": "ephemeral",
+            }
     return make_response("", 404)
 
 
@@ -55,11 +61,9 @@ def handle_direct_message(event_data):
         if match:
             employee_id = int(match.group(1))
             response = bot.enrol_user(user, employee_id)
-            response.pop("response_type", None)
             slack_client.chat_postEphemeral(channel=channel, user=user, **response)
             return Response(status=200)
         response = bot.help()
-        response.pop("response_type", None)
         slack_client.chat_postEphemeral(channel=channel, user=user, **response)
     return Response(status=200)
 
