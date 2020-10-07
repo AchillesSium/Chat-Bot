@@ -1,0 +1,12 @@
+skill_features:
+  feature_type: 'skill' # One of 'word', 'skill', 'noun' (for nounphrase)
+  use_lowercase: Yes
+
+similarity_metric: 'cosine' # One of 'cosine', ...
+normalize_skill_vectors: No
+use_binary: Yes # If true, use only 0 and 1 for skill values, even if they appear multiple times
+rarest_allowed_skill: 1 # E.g. if == 3, skills with less than 3 employees will be ignored. <= 1 to not ignore anything
+
+neighbourhood:
+  use_neighbourhood: No
+  neighbourhood_size: 20
