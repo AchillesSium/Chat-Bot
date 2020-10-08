@@ -6,7 +6,7 @@ conn = sqlite3.connect('botdb.db')
 c = conn.cursor()
 
 def create_table():
-    c.execute('CREATE TABLE IF NOT EXISTS employees(id VARCHAR(1000) UNIQUE, name TEXT, designation TEXT, joiningDate TEXT, skill REAL)')
+    c.execute('CREATE TABLE IF NOT EXISTS employees(id INT UNIQUE, name TEXT, designation TEXT, joiningDate TEXT, skill REAL)')
 
 def dynamic_data():
     empid = input('What is your employee id?\n')
@@ -43,7 +43,7 @@ create_table()
 
 for i in range(2):
     dynamic_data()
-    time.sleep(2)
+
 
 search_for_empid()
 update_designation()
