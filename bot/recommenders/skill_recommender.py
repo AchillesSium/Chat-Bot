@@ -222,8 +222,11 @@ class SimilarityClac:
 
 
 class SkillRecommenderCF:
-    def __init__(self):
-        # TODO: Add datasource as a paremter
+    def __init__(self, ds: Optional[Datasource] = None):
+        if ds is not None:
+            self.ds = ds
+        else:
+            self.ds = Datasource()
 
         self.initialize_recommender()
 
@@ -331,7 +334,7 @@ class SkillRecommenderCF:
         return list(similarities.nlargest(sz).index)
 
     def get_user_skills(self, user_id: int):
-        if user_id in self.skill_index.loc:
+        if user_id in self.skill_index.index:
             user_skills = [
                 skill for skill, sc in self.skill_index.loc[user_id].items() if sc > 0
             ]
@@ -340,18 +343,20 @@ class SkillRecommenderCF:
 
         return user_skills
 
-    def initialize_recommender(self):
+    def initialize_recommender(self, ds: Optional[Datasource] = None):
+        if ds is not None:
+            self.ds = ds
+
         print("Initializing recommender")
         self.config = read_yaml(
             Path(__file__).parent / "config" / "skill_recommender.yaml"
         )
 
-        source = Datasource()
         skill_extractor = SkillExtractor(self.config["skill_features"])
         similarity_evaluator = SimilarityClac(self.config["similarity_metric"])
 
         print("Fetching skill data")
-        raw_skills_by_user = clean_skills(source.skills_by_user())
+        raw_skills_by_user = clean_skills(self.ds.skills_by_user())
 
         print("Extracting skill features")
         user_skills = skill_extractor.extract_skill_features(raw_skills_by_user)
