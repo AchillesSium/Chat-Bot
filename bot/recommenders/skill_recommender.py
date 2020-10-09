@@ -223,6 +223,8 @@ class SimilarityClac:
 
 class SkillRecommenderCF:
     def __init__(self):
+        # TODO: Add datasource as a paremter
+
         self.initialize_recommender()
 
         # Keep track of recommendations so as to not recommend the same thing multiple times
@@ -328,6 +330,16 @@ class SkillRecommenderCF:
 
         return list(similarities.nlargest(sz).index)
 
+    def get_user_skills(self, user_id: int):
+        if user_id in self.skill_index.loc:
+            user_skills = [
+                skill for skill, sc in self.skill_index.loc[user_id].items() if sc > 0
+            ]
+        else:
+            user_skills = []
+
+        return user_skills
+
     def initialize_recommender(self):
         print("Initializing recommender")
         self.config = read_yaml(
@@ -371,9 +383,11 @@ class SkillRecommenderCF:
         @param nb_most_similar: How many "most similar" skills of the user to list
         @return: List of skills recommended to user, their similarities and what they are most similar to
         """
-        user_skills = [
-            skill for skill, sc in self.skill_index.loc[user_id].items() if sc > 0
-        ]
+        user_skills = self.get_user_skills(user_id)
+
+        if len(user_skills) == 0:
+            raise KeyError(f"No skill data found for user {user_id}")
+
         user_skill_vector = self.skill_index.loc[user_id]
 
         if not self.config["neighbourhood"]["use_neighbourhood"]:
@@ -415,10 +429,36 @@ class SkillRecommenderCF:
 
 
 if __name__ == "__main__":
+
+    def print_recs(recommendation: SkillRecommendation, user_id: int):
+        rlist = recommendation.recommendation_list
+
+        print("Recommended skills for user " + str(user_id))
+        for r in rlist:
+            print(f"\t{r}")
+
     # For debugging
     rec = SkillRecommenderCF()
+    user_id = 775
 
-    rec_for_775 = rec.recommend_skills_to_user(775)
-    print(f"Recommendation for user with ID 775:\n{str(rec_for_775)}")
+    rec_for_user = rec.recommend_skills_to_user(user_id)
+    print_recs(rec_for_user, user_id)
+
+    do_not_repeat = rec_for_user.recommendation_list[0]
+    print(f"Adding {do_not_repeat} to history")
+    rec.update_recommendation_history(user_id, do_not_repeat)
+
+    new_rec = rec.recommend_skills_to_user(user_id)
+    print_recs(new_rec, user_id)
+
+    print("Resetting recommendation history")
+    rec.clear_recommendation_history()
+
+    new_rec = rec.recommend_skills_to_user(user_id)
+    print_recs(new_rec, user_id)
+
+    print(new_rec)
 
     print("Breakpoint here")
+
+# TODO: Add option to change recommender settings from slack?
