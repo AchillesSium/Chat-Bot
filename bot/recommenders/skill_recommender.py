@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, abc
 import numpy as np
 from typing import Optional, MutableMapping, Any, NewType, MutableSequence, Set
 
@@ -23,6 +23,24 @@ class SkillRecommendation:
     recommendation_list: MutableSequence[str]
     similarities: MutableSequence[float]
     most_similar_to: MutableSequence[str]
+
+
+def recursive_update_dict(dict1, dict2):
+    """ Recursively merge dictionaries.
+
+    :param dict1: Base dictionary to merge.
+    :param dict2: Dictionary to merge on top of base dictionary.
+    :return: Merged dictionary
+    """
+    for key, val in dict1.items():
+        if isinstance(val, abc.Mapping):
+            dict2_node = dict2.setdefault(key, {})
+            recursive_update_dict(val, dict2_node)
+        else:
+            if key not in dict2:
+                dict2[key] = val
+
+    return dict2
 
 
 def read_yaml(path: Path) -> YAML:
@@ -333,6 +351,23 @@ class SkillRecommenderCF:
 
         return list(similarities.nlargest(sz).index)
 
+    def _reload_options(self):
+        self.config = read_yaml(
+            Path(__file__).parent / "config" / "skill_recommender.yaml"
+        )
+
+    def update_options(self, opt: MutableMapping[str, Any], reinitialize: bool = True):
+        """ Update the options of the recommender.
+        Can also reinitialize recommender after updating options.
+
+        @param opt: Updated options/parameters
+        @param reinitialize: Whether or not to also reinitialize the recommender after updating options
+        """
+        self.config = recursive_update_dict(self.config, opt)
+
+        if reinitialize:
+            self.initialize_recommender(reload_options=False)
+
     def get_user_skills(self, user_id: int):
         if user_id in self.skill_index.index:
             user_skills = [
@@ -343,14 +378,15 @@ class SkillRecommenderCF:
 
         return user_skills
 
-    def initialize_recommender(self, ds: Optional[Datasource] = None):
+    def initialize_recommender(
+        self, ds: Optional[Datasource] = None, reload_options: bool = True
+    ):
         if ds is not None:
             self.ds = ds
 
         print("Initializing recommender")
-        self.config = read_yaml(
-            Path(__file__).parent / "config" / "skill_recommender.yaml"
-        )
+        if reload_options:
+            self._reload_options()
 
         skill_extractor = SkillExtractor(self.config["skill_features"])
         similarity_evaluator = SimilarityClac(self.config["similarity_metric"])
@@ -462,8 +498,16 @@ if __name__ == "__main__":
     new_rec = rec.recommend_skills_to_user(user_id)
     print_recs(new_rec, user_id)
 
-    print(new_rec)
+    print("Changing lowercase setting")
+    rec.update_options(
+        {
+            "skill_features": {
+                "use_lowercase": not rec.config["skill_features"]["use_lowercase"]
+            }
+        }
+    )
+
+    new_rec = rec.recommend_skills_to_user(user_id)
+    print_recs(new_rec, user_id)
 
     print("Breakpoint here")
-
-# TODO: Add option to change recommender settings from slack?
