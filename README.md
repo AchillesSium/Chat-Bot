@@ -37,21 +37,27 @@ $ source venv/bin/activate
 ```bash
 $ pip install -r requirements.txt
 ```
+#### Optional (for now at least):
+- Download nltk packages for language processing
+```bash
+$  python3 -c "import nltk;nltk.download('punkt');nltk.download('averaged_perceptron_tagger')"
+```
 
 ### Setting up the app locally for testing
 
 - Create a slack workspace where you can install the app
 - Create a new slack app [here](https://api.slack.com/apps), and follow the
   instructions
-- Add needed scopes for the app from OAuth & Permissions. I have added the
+- Add needed scopes for the app from the *OAuth & Permissions* tab in the sidebar under **Features**.
+  Add the scopes in the **Scopes** -> **Bot token scopes** section. I have added the
   following scopes as of writing this.
   - `app_mentions:read`
   - `channels:history`
   - `chat:write`
   - `commands`
   - `im:history`
-  - `incoming-webhooks`
-- Install the app to the workspace from the *Install App* tab
+  - `incoming-webhook`
+- Install the app to the workspace from the *Install App* tab under **Settings**
 - Copy the necessary tokens to `.env` file
   - copy the `.env.sample` file to `.env`
   - replace the dummy tokens with the actual ones: Signing secret from the
