@@ -1,103 +1,89 @@
 import sqlite3
 import datetime
 
+
 class BotDatabase:
+    DATE_FORMAT = "%Y-%m-%d %H:%M:%s"
 
-    def __init__(self, db_file_name):
-        db_file_name = str(db_file_name)
-        self.dbConnetion = sqlite3.connect(db_file_name)
-        self.create_tables()
+    def __init__(self, db_file_name: str):
+        self.connection = sqlite3.connect(db_file_name)
+        self._create_tables()
 
-    def create_tables(self):
-        self.create_users_table()
-        self.create_history_table()
-
-    def create_users_table(self):
-        with self.dbConnetion as conn:
+    def _create_tables(self):
+        with self.connection as conn:
             botdb = conn.cursor()
-            botdb.execute('CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY UNIQUE, employeeId INT)')
+            botdb.execute(
+                "CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY UNIQUE, employeeId INT)"
+            )
+            botdb.execute(
+                "CREATE TABLE IF NOT EXISTS history(user_id TEXT, dateStamp TEXT, recommended_skill TEXT, FOREIGN KEY(user_id) REFERENCES users(id))"
+            )
 
-    def create_history_table(self):
-        with self.dbConnetion as conn:
+    def add_user(self, user_id, employee_id):
+        with self.connection as conn:
             botdb = conn.cursor()
-            botdb.execute('CREATE TABLE IF NOT EXISTS history(user_id TEXT, dateStamp TEXT, recomended_team TEXT, FOREIGN KEY(user_id) REFERENCES users(id))')
-
-    def add_users(self, id, employeeId):
-        with self.dbConnetion as conn:
-            botdb = conn.cursor()
-            id  = str(id)
-            employeeId = int(employeeId)
             try:
-                botdb.execute("INSERT INTO users (id, employeeId) VALUES(?,?)",
-                    (id, employeeId))
-                conn.commit()
-                return True
+                botdb.execute(
+                    "INSERT INTO users (id, employeeId) VALUES(?,?)",
+                    (user_id, employee_id),
+                )
             except sqlite3.IntegrityError:
-                return False
-                # raise KeyError('User already exists')
+                raise KeyError("User already exists")
 
-    def add_history(self, user_id, dateStamp, recomended_team):
-        with self.dbConnetion as conn:
+    def add_history(self, user_id, dateStamp, recommended_skill):
+        with self.connection as conn:
             botdb = conn.cursor()
-            user_id = str(user_id)
-            dateStamp = dateStamp.strftime('%Y-%m-%d %H:%M:%s')
-            recomended_team = str(recomended_team)
-            try:
-                botdb.execute("INSERT OR IGNORE INTO history (user_id, dateStamp, recomended_team) VALUES(?,?,?)",
-                (user_id, dateStamp, recomended_team))
-                conn.commit()
-                return True
-            except sqlite3.IntegrityError:
-                return False
+            dateStamp = dateStamp.strftime(self.DATE_FORMAT)
+            botdb.execute(
+                "INSERT OR IGNORE INTO history (user_id, dateStamp, recommended_skill) VALUES(?,?,?)",
+                (user_id, dateStamp, recommended_skill),
+            )
 
-    def get_user_by_id(self, id):
-        with self.dbConnetion as conn:
-            botdb = conn.cursor()
-            id = str(id)
-            botdb.execute("SELECT * FROM users WHERE id = (?)", (id,))
-            return botdb.fetchall()
+    def get_user_by_id(self, user_id):
+        botdb = self.connection.cursor()
+        botdb.execute("SELECT * FROM users WHERE id = (?)", (user_id,))
+        result = botdb.fetchall()
+        if not result:
+            raise KeyError("user_id not found", user_id)
+        assert len(result) == 1, "database is corrupt"
+        return result[0]
 
-    def get_user_by_employeeid(self, employeeId):
-        with self.dbConnetion as conn:
-            botdb = conn.cursor()
-            employeeId = str(employeeId)
-            botdb.execute("SELECT * FROM users WHERE employeeId = (?)", (employeeId,))
-            return botdb.fetchall()
+    def get_user_by_employeeid(self, employee_id):
+        botdb = self.connection.cursor()
+        botdb.execute("SELECT * FROM users WHERE employeeId = (?)", (employee_id,))
+        return botdb.fetchall()
+
+    def _parse_history(self, history):
+        # TODO: use adapters and converters for datetime.datetime instead
+        return [
+            (a, datetime.datetime.strptime(date, self.DATE_FORMAT), c)
+            for a, date, c in history
+        ]
 
     def get_history_by_user_id(self, user_id):
-        with self.dbConnetion as conn:
-            botdb = conn.cursor()
-            user_id = str(user_id)
-            botdb.execute("SELECT * FROM history WHERE user_id = (?)", (user_id,))
-            return botdb.fetchall()
+        botdb = self.connection.cursor()
+        botdb.execute(
+            "SELECT * FROM history WHERE user_id = (?) ORDER BY dateStamp DESC",
+            (user_id,),
+        )
+        return self._parse_history(botdb.fetchall())
 
     def get_history_sortedby_datestamp(self):
-        with self.dbConnetion as conn:
-            botdb = conn.cursor()
-            botdb.execute("SELECT * FROM history ORDER BY dateStamp DESC")
-            return botdb.fetchall()
+        botdb = self.connection.cursor()
+        botdb.execute("SELECT * FROM history ORDER BY dateStamp DESC")
+        return self._parse_history(botdb.fetchall())
 
-    def get_history_by_recommendedTeam(self, recomended_team):
-        with self.dbConnetion as conn:
+    def delete_user(self, user_id):
+        self.get_user_by_id(user_id)  # fail if user does not exist
+        self.delete_history_by_user_id(user_id)
+        with self.connection as conn:
             botdb = conn.cursor()
-            recomended_team = str(recomended_team)
-            botdb.execute("SELECT * FROM history WHERE recomended_team = (?)", (recomended_team,))
-            return botdb.fetchall()
+            botdb.execute("DELETE FROM users WHERE user_id = (?)", (user_id,))
 
-    def delete_history_by_user_Id(self, user_id):
-        with self.dbConnetion as conn:
+    def delete_history_by_user_id(self, user_id):
+        with self.connection as conn:
             botdb = conn.cursor()
-            user_id = str(user_id)
-            try:
-                botdb.execute("DELETE FROM history WHERE user_id = (?)", (user_id,))
-                conn.commit()
-                return True
-            except:
-                print('False')
-                return False
+            botdb.execute("DELETE FROM history WHERE user_id = (?)", (user_id,))
 
-    def close_database(self):
-        with self.dbConnetion as conn:
-            botdb = conn.cursor()
-            botdb.close()
-            conn.close()
+    def close(self):
+        self.connection.close()
