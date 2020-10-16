@@ -2,36 +2,37 @@ from typing import NamedTuple, Optional
 
 from bot.data_api.datasource import Datasource
 from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
+from bot.chatBotDatabase import BotDatabase
 
 
 class User(NamedTuple):
     id: str
     employee_id: int
-    # Whatever other fields we need
-    previous_time: Optional[int] = None
-    previous_recommendation: Optional[SkillRecommendation] = None
 
 
 class Bot:
-    def __init__(self, user_db=None, data_source=None):
-        self.user_db = user_db or InMemoryDb()
-        self.data_source = data_source or Datasource()
-        self.recommender = SkillRecommenderCF()
+    def __init__(
+        self,
+        user_db: Optional[BotDatabase] = None,
+        data_source: Optional[Datasource] = None,
+    ):
+        self.user_db: BotDatabase = user_db or BotDatabase(":memory:")
+        self.data_source: Datasource = data_source or Datasource()
+        self.recommender = SkillRecommenderCF(self.data_source)
 
     def help(self):
         return {
             "text": "Example help message:\nTo enrol, send me a message like: 'enrol <employee_id>'",
         }
 
-    def enrol_user(self, user_id, employee_id):
+    def enrol_user(self, user_id: str, employee_id: int):
         if self.data_source.user_info(employee_id) is None:
             return {
                 "text": f"Hmm... There is no record for the employee id: {employee_id}"
             }
 
-        user = User(user_id, employee_id)
         try:
-            self.user_db.add_user(user)
+            self.user_db.add_user(user_id, employee_id)
         except KeyError:
             return {"text": "You are already enrolled!"}
 
@@ -51,16 +52,3 @@ class Bot:
             },
         ]
         return {"blocks": blocks}
-
-
-class InMemoryDb:
-    def __init__(self):
-        self.users = {}
-
-    def add_user(self, user: User):
-        if user.id in self.users:
-            raise KeyError("user exists")
-        self.users[user.id] = user
-
-    def find_user(self, user_id: str):
-        return self.users[user_id]
