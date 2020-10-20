@@ -174,14 +174,20 @@ class SkillExtractor:
         for key, feat_func in feat_functions.items():
             if skill_feat_type.lower().startswith(key):
                 break
+        else:
+            available = ", ".join(feat_functions)
+            raise AttributeError(
+                f"Skill feature {skill_feat_type!r} not recognized! Available options are: {available}"
+            )
+
         if stemmer_name:
             for key, stemmer in stemmers.items():
                 if stemmer_name.lower().startswith(key):
                     break
         else:
-            available = ", ".join(feat_functions)
+            available = ", ".join(stemmers)
             raise AttributeError(
-                f"Skill feature {skill_feat_type!r} not recognized! Available options are: {available}"
+                f"Stemmer {stemmer_name!r} not recognized! Available options are: {available}"
             )
 
         skill_features = {}
@@ -278,15 +284,19 @@ class SimilarityClac:
     def __init__(self, metric_name: str):
         self.metric = metric_name.lower()
 
-        if self.metric.startswith("cosine"):
-            self._similarity_func = self._cosine_similarity
-        elif self.metric.startswith("jacc"):
-            self._similarity_func = self._jaccard_similarity
+        similarity_functions = {
+            "cosine": self._cosine_similarity,
+            "jacc": self._jaccard_similarity,
+        }
+
+        for metric_name, func in similarity_functions.items():
+            if metric_name.startswith(self.metric):
+                self._similarity_func = func
+                break
         else:
+            available = ", ".join(similarity_functions)
             raise AttributeError(
-                f"Unknown similarity metric {metric_name}!\nCurrently implemented:"
-                f"\n\tcosine similarity\n"
-                f"\n\tjaccard similarity."
+                f"Similarity metric {metric_name} not recognized! Available options are: {available}"
             )
 
     def __call__(self, skill_data):
