@@ -2,13 +2,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from collections import Counter, defaultdict, abc
 import numpy as np
-from typing import Optional, MutableMapping, Any, NewType, MutableSequence, Set
+import re
+from typing import (
+    Optional,
+    MutableMapping,
+    Any,
+    NewType,
+    MutableSequence,
+    Set,
+    Tuple,
+    Dict,
+)
 
 import yaml
 import pandas as pd
 from tqdm import tqdm
 import nltk
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import cosine_similarity, pairwise_distances
 from scipy import sparse
 
 # Not sure this will be correct always
@@ -53,7 +63,7 @@ def read_yaml(path: Path) -> YAML:
         return yaml.safe_load(f)
 
 
-def clean_one(sentence: str):
+def clean_one(sentence: str, settings: MutableMapping[str, Any]):
     """ Clean a sentence.
     Includes stripping whitespace, removing non-characters.
 
@@ -64,6 +74,9 @@ def clean_one(sentence: str):
     """
     to_remove = [
         "\u2022",
+        "\u2019",
+        "`",
+        "´",
         "●",
         '"',
         "'",
@@ -77,15 +90,22 @@ def clean_one(sentence: str):
         ":",
         ";",
         "⁃",
+        "!",
+        "?",
     ]
 
     for i in to_remove:
         sentence = sentence.replace(i, "")
 
-    return sentence.strip()
+    if settings["remove_numbers"]:
+        re.sub(r"[0-9]+\b", "", sentence)
+
+    sentence = sentence.strip()
+
+    return sentence
 
 
-def clean_skills(data: SkillData) -> SkillData:
+def clean_skills(data: SkillData, settings: MutableMapping[str, Any]) -> SkillData:
     """ Clean the skill elements in the data.
     Includes stripping whitespace, removing non-characters.
 
@@ -95,7 +115,16 @@ def clean_skills(data: SkillData) -> SkillData:
     cleaned_data = {}
     for employee_id, skills in data.items():
         if skills is not None:
-            cleaned_data[employee_id] = [clean_one(s) for s in skills]
+            tmp = []
+            for s in skills:
+                cl_s = clean_one(s, settings)
+
+                max_size = settings["skill_features"]["max_word_count"]
+                if max_size < 1 or len(nltk.tokenize.word_tokenize(cl_s)) <= max_size:
+                    tmp.append(cl_s)
+
+            if len(tmp) > 0:
+                cleaned_data[employee_id] = tmp
 
     return cleaned_data
 
@@ -109,7 +138,21 @@ class SkillExtractor:
         """
         self.chunker = nltk.RegexpParser(chunker_patterns)
 
-    def extract_skill_features(self, data: SkillData) -> SkillData:
+    @staticmethod
+    def _stem_skills(skills: MutableSequence[str], stemmer: nltk.StemmerI):
+        result = []
+        for skill in skills:
+            words = nltk.tokenize.word_tokenize(skill)
+            stemmed_skill = " ".join(
+                stemmer.stem(word) for word in words if not word.endswith("js")
+            )
+            result.append(stemmed_skill)
+
+        return result
+
+    def extract_skill_features(
+        self, data: SkillData
+    ) -> Tuple[SkillData, Dict[str, str]]:
         """ Create new SkillData dict with extracted features
 
         @param data: Raw
@@ -121,10 +164,20 @@ class SkillExtractor:
             "skill": self._extract_skills,
             "word": self._extract_words,
         }
+        stemmer_name = self.config["stemming"]
+        stemmers = {
+            "porter": nltk.PorterStemmer(),
+            "snowball": nltk.SnowballStemmer("english"),
+            "lanc": nltk.LancasterStemmer(),
+        }
         # Python dictionaries guarantee insertion ordering starting from 3.7
         for key, feat_func in feat_functions.items():
             if skill_feat_type.lower().startswith(key):
                 break
+        if stemmer_name:
+            for key, stemmer in stemmers.items():
+                if stemmer_name.lower().startswith(key):
+                    break
         else:
             available = ", ".join(feat_functions)
             raise AttributeError(
@@ -132,13 +185,30 @@ class SkillExtractor:
             )
 
         skill_features = {}
+        skill_key = {}
         for employee_id, skills in data.items():
             if skills is not None:
-                skill_features[employee_id] = feat_func(skills)
+                skill_feat = feat_func(skills)
+                no_post_skill = skill_feat
+
+                if self.config["use_lowercase"]:
+                    skill_feat = [s.lower() for s in skill_feat]
+
+                if stemmer_name:
+                    skill_feat = self._stem_skills(skill_feat, stemmer)
+
+                skill_features[employee_id] = skill_feat
+                skill_key.update(
+                    {
+                        processed: unprocessed
+                        for processed, unprocessed in zip(skill_feat, no_post_skill)
+                    }
+                )
+
             else:
                 skill_features[employee_id] = None
 
-        return skill_features
+        return skill_features, skill_key
 
     def _extract_words(self, skills: MutableSequence[str]):
         ignored = [
@@ -154,27 +224,23 @@ class SkillExtractor:
             "development",
             "for",
             "with",
-        ]
+            "e.g.",
+            "eg",
+            "e.g",
+            "i.e.",
+            "i.e",
+            "ie",
+        ] + nltk.corpus.stopwords.words("english")
 
         result = []
         for s in skills:
-            if self.config["use_lowercase"]:
-                words = s.lower().split()
-            else:
-                words = s.split()
+            words = nltk.tokenize.word_tokenize(s)
             result.extend(w for w in words if w.lower() not in ignored)
 
         return result
 
     def _extract_skills(self, skills: MutableSequence[str]):
-        result = []
-        for s in skills:
-            if self.config["use_lowercase"]:
-                result.append(s.lower())
-            else:
-                result.append(s)
-
-        return result
+        return skills
 
     def _parse_nounphrases(self, sentence):
         tokens = nltk.word_tokenize(sentence)
@@ -202,10 +268,7 @@ class SkillExtractor:
     def _extract_noun_phrases(self, skills: MutableSequence[str]):
         result = []
         for s in skills:
-            if self.config["use_lowercase"]:
-                phrases = self._extract_phrases(s.lower())
-            else:
-                phrases = self._extract_phrases(s)
+            phrases = self._extract_phrases(s)
             result.extend(phrases)
 
         return result
@@ -217,16 +280,20 @@ class SimilarityClac:
 
         if self.metric.startswith("cosine"):
             self._similarity_func = self._cosine_similarity
+        elif self.metric.startswith("jacc"):
+            self._similarity_func = self._jaccard_similarity
         else:
             raise AttributeError(
-                f"Unknown similarity metric {metric_name}!\nCurrently implemented:\n\tcosine similarity\n."
+                f"Unknown similarity metric {metric_name}!\nCurrently implemented:"
+                f"\n\tcosine similarity\n"
+                f"\n\tjaccard similarity."
             )
 
     def __call__(self, skill_data):
         return self._similarity_func(skill_data)
 
     @staticmethod
-    def _cosine_similarity(skill_data):
+    def _cosine_similarity(skill_data: pd.DataFrame):
         """Calculate the column-wise cosine similarity for a sparse
             matrix. Return a new dataframe matrix with similarities.
         """
@@ -235,6 +302,16 @@ class SimilarityClac:
 
         sim = pd.DataFrame(
             data=similarities, index=skill_data.columns, columns=skill_data.columns
+        )
+        return sim
+
+    @staticmethod
+    def _jaccard_similarity(skill_data: pd.DataFrame):
+        # Jaccard similarity is 1 - hamming distance
+        jac_sim = 1 - pairwise_distances(skill_data.T, metric="hamming")
+
+        sim = pd.DataFrame(
+            data=jac_sim, index=skill_data.columns, columns=skill_data.columns
         )
         return sim
 
@@ -384,29 +461,32 @@ class SkillRecommenderCF:
         if ds is not None:
             self.ds = ds
 
-        print("Initializing recommender")
+        # print("Initializing recommender")
         if reload_options:
             self._reload_options()
 
         skill_extractor = SkillExtractor(self.config["skill_features"])
         similarity_evaluator = SimilarityClac(self.config["similarity_metric"])
 
-        print("Fetching skill data")
-        raw_skills_by_user = clean_skills(self.ds.skills_by_user())
+        # print("Fetching skill data")
+        raw_skills_by_user = clean_skills(self.ds.skills_by_user(), self.config)
 
-        print("Extracting skill features")
-        user_skills = skill_extractor.extract_skill_features(raw_skills_by_user)
+        # print("Extracting skill features")
+        user_skills, skill_key = skill_extractor.extract_skill_features(
+            raw_skills_by_user
+        )
+        self.skill_key = skill_key
 
-        print("Constructing skill index")
+        # print("Constructing skill index")
         self._make_skill_index(user_skills)
-        print("Constructing skill similarity matrix")
+        # print("Constructing skill similarity matrix")
         self.skill_similarity = similarity_evaluator(self.skill_index)
 
         if self.config["neighbourhood"]["use_neighbourhood"]:
-            print("Evaluating skill neighbours")
+            # print("Evaluating skill neighbours")
             self._eval_skill_neighbours()
 
-        print("Init done!")
+        # print("Init done!")
 
     def clear_recommendation_history(self):
         self.recommendation_history.clear()
@@ -415,7 +495,7 @@ class SkillRecommenderCF:
         self.recommendation_history[user_id].add(skill)
 
     def recommend_skills_to_user(
-        self, user_id: int, nb_recommendations: int = 5, nb_most_similar: int = 5
+        self, user_id: int, nb_recommendations: int = 10, nb_most_similar: int = 5
     ) -> SkillRecommendation:
         """ Recommend skills to user based on CF
 
@@ -466,6 +546,9 @@ class SkillRecommenderCF:
             rec_skills, user_skills, nb_most_similar
         )
 
+        if self.config["convert_back"]:
+            rec_skills = [self.skill_key[s] for s in rec_skills]
+
         return SkillRecommendation(rec_skills, rec_similarities, rec_most_similar)
 
 
@@ -473,41 +556,134 @@ if __name__ == "__main__":
 
     def print_recs(recommendation: SkillRecommendation, user_id: int):
         rlist = recommendation.recommendation_list
+        slist = recommendation.similarities
 
         print("Recommended skills for user " + str(user_id))
-        for r in rlist:
-            print(f"\t{r}")
+        for r, s in zip(rlist, slist):
+            print(f"\t{r}\t{s}")
+
+        print(
+            f"Average recommendation similarity: {np.mean(recommendation.similarities):.3f}"
+        )
 
     # For debugging
     rec = SkillRecommenderCF()
-    user_id = 775
+    # user_id = 775
+    user_id = 759
+    sep = "\n" + 100 * "=" + "\n"
 
-    rec_for_user = rec.recommend_skills_to_user(user_id)
-    print_recs(rec_for_user, user_id)
+    print("Changing rarest_allowed_skill")
+    for i in range(1, 11):
+        print(f"Setting rarest_allowed_skill={i}")
 
-    do_not_repeat = rec_for_user.recommendation_list[0]
-    print(f"Adding {do_not_repeat} to history")
-    rec.update_recommendation_history(user_id, do_not_repeat)
+        rec.update_options({"rarest_allowed_skill": i})
+        new_rec = rec.recommend_skills_to_user(user_id)
 
-    new_rec = rec.recommend_skills_to_user(user_id)
-    print_recs(new_rec, user_id)
+        print_recs(new_rec, user_id)
+    print(sep)
 
-    print("Resetting recommendation history")
-    rec.clear_recommendation_history()
+    print("Changing use_binary")
+    for i in [True, False]:
+        print(f"Setting use_binary={i}")
 
-    new_rec = rec.recommend_skills_to_user(user_id)
-    print_recs(new_rec, user_id)
+        rec.update_options({"rarest_allowed_skill": 2, "use_binary": i})  # Default
+        new_rec = rec.recommend_skills_to_user(user_id)
 
-    print("Changing lowercase setting")
-    rec.update_options(
-        {
-            "skill_features": {
-                "use_lowercase": not rec.config["skill_features"]["use_lowercase"]
+        print_recs(new_rec, user_id)
+    print(sep)
+
+    print(f"Changing normalize_skill_vectors")
+    for i in [True, False]:
+        print(f"Setting normalize_skill_vectors={i}")
+
+        rec.update_options(
+            {"use_binary": True, "normalize_skill_vectors": i}  # Default
+        )
+        new_rec = rec.recommend_skills_to_user(user_id)
+
+        print_recs(new_rec, user_id)
+    print(sep)
+
+    print(f"Changing feature_type")
+    for i in ["skill", "word", "noun"]:
+        print(f"Setting feature_type={i}")
+
+        rec.update_options(
+            {
+                "normalize_skill_vectors": True,  # Default
+                "skill_features": {"feature_type": i},
             }
-        }
-    )
+        )
+        new_rec = rec.recommend_skills_to_user(user_id)
 
-    new_rec = rec.recommend_skills_to_user(user_id)
-    print_recs(new_rec, user_id)
+        print_recs(new_rec, user_id)
+    print(sep)
+
+    print(f"Changing use_lowercase")
+    for i in [True, False]:
+        print(f"Setting use_lowercase={i}")
+
+        rec.update_options(
+            {
+                "normalize_skill_vectors": True,  # Default
+                "skill_features": {"feature_type": "skill", "use_lowercase": i},
+            }
+        )
+        new_rec = rec.recommend_skills_to_user(user_id)
+
+        print_recs(new_rec, user_id)
+    print(sep)
+
+    print(f"Changing similarity_metric")
+    for metric in ["cosine", "jaccard"]:
+        print(f"Setting similarity_metric={metric}")
+
+        rec.update_options(
+            {"similarity_metric": metric, "skill_features": {"use_lowercase": True}}
+        )
+        new_rec = rec.recommend_skills_to_user(user_id)
+
+        print_recs(new_rec, user_id)
+    print(sep)
+
+    print(f"Changing stemming")
+    for stemmer in ["porter", "snowball", "lanc"]:
+        print(f"Setting stemming={stemmer}")
+
+        rec.update_options(
+            {"similarity_metric": "cosine", "skill_features": {"stemming": stemmer}}
+        )
+        new_rec = rec.recommend_skills_to_user(user_id)
+
+        print_recs(new_rec, user_id)
+    print(sep)
+
+    # rec_for_user = rec.recommend_skills_to_user(user_id)
+    # print_recs(rec_for_user, user_id)
+    #
+    # do_not_repeat = rec_for_user.recommendation_list[0]
+    # print(f"Adding {do_not_repeat} to history")
+    # rec.update_recommendation_history(user_id, do_not_repeat)
+    #
+    # new_rec = rec.recommend_skills_to_user(user_id)
+    # print_recs(new_rec, user_id)
+    #
+    # print("Resetting recommendation history")
+    # rec.clear_recommendation_history()
+    #
+    # new_rec = rec.recommend_skills_to_user(user_id)
+    # print_recs(new_rec, user_id)
+    #
+    # print("Changing lowercase setting")
+    # rec.update_options(
+    #     {
+    #         "skill_features": {
+    #             "use_lowercase": not rec.config["skill_features"]["use_lowercase"]
+    #         }
+    #     }
+    # )
+    #
+    # new_rec = rec.recommend_skills_to_user(user_id)
+    # print_recs(new_rec, user_id)
 
     print("Breakpoint here")
