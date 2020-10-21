@@ -55,6 +55,11 @@ class BotDatabase:
         botdb.execute("SELECT * FROM users WHERE employeeId = (?)", (employee_id,))
         return botdb.fetchall()
 
+    def get_users(self):
+        botdb = self.connection.cursor()
+        botdb.execute("SELECT * FROM users")
+        return botdb.fetchall()
+
     def _parse_history(self, history):
         # TODO: use adapters and converters for datetime.datetime instead
         return [
