@@ -41,9 +41,50 @@ class Bot:
         now = datetime.datetime.now()
         # TODO: skip weekends and non working hours
         print("tick", now)
+        # TODO: configure the interval for skill suggestions
+        limit = datetime.timedelta(seconds=20)
         users = self.user_db.get_users()
         for user_id, employee_id in users:
-            ...  # TODO: get and send recommendations for user
+            history = self.user_db.get_history_by_user_id(user_id)
+            if history:
+                last = history[0][1]
+                if now - last < limit:
+                    continue
+            rec = self._recommendations_for(employee_id=employee_id, history=history)
+            if not rec:
+                continue
+            ok = self.send_message(user_id, self._format_skill_recommendations(rec))
+            if ok:
+                for skill in rec:
+                    self.user_db.add_history(user_id, now, skill)
+
+    def _recommendations_for(
+        self, *, user_id=None, employee_id=None, history=None, limit=2
+    ):
+        assert (user_id is None) ^ (
+            employee_id is None
+        ), "exactly one of the id's must be provided"
+        if employee_id is None:
+            _, employee_id = self.user_db.get_user_by_id(user_id)
+        rec = self.recommender.recommend_skills_to_user(employee_id)
+        skills = rec.recommendation_list
+        if history is None:
+            history = self.user_db.get_history_by_user_id(user_id)
+        if not history:
+            return skills[:limit]
+        previous = {item for _id, _date, item in history}
+        return [item for item in skills if item not in previous][:limit]
+
+    def _format_skill_recommendations(self, recommendation_list):
+        if recommendation_list:
+            skills = "\n".join(f"- {r}" for r in recommendation_list)
+            text = "We found these skills similar to yours:\n" + skills
+        else:
+            text = "We found no skills to suggest this time"
+        blocks = [
+            {"type": "section", "text": {"type": "mrkdwn", "text": text,},},
+        ]
+        return {"blocks": blocks}
 
     def enrol_user(self, user_id: str, employee_id: int):
         if self.data_source.user_info(employee_id) is None:
@@ -56,19 +97,12 @@ class Bot:
         except KeyError:
             return {"text": "You are already enrolled!"}
 
-        rec = self.recommender.recommend_skills_to_user(employee_id)
-        skills = "\n".join(f"- {r}" for r in rec.recommendation_list)
+        rec = self._recommendations_for(employee_id=employee_id, limit=None)
         blocks = [
             {
                 "type": "section",
                 "text": {"type": "mrkdwn", "text": "*Success!* You are now enrolled"},
             },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "We found these skills similar to yours:\n" + skills,
-                },
-            },
+            *self._format_skill_recommendations(rec)["blocks"],
         ]
         return {"blocks": blocks}
