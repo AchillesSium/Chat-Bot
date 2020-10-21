@@ -4,7 +4,7 @@ import threading
 
 
 class BotDatabase:
-    DATE_FORMAT = "%Y-%m-%d %H:%M:%s"
+    DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
     def __init__(self, db_file_name: str):
         self._lock = threading.RLock()
