@@ -1,7 +1,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from typing import NamedTuple, Optional, Callable
 
-import datetime
+from datetime import datetime, timedelta
 
 from bot.data_api.datasource import Datasource
 from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
@@ -26,10 +26,7 @@ class Bot:
         self.recommender = SkillRecommenderCF(self.data_source)
 
         self.scheduler = BackgroundScheduler()
-        # TODO: configure the check interval, and maybe use 'date' based scheduling
-        self.scheduler.add_job(
-            self._check_skill_recommendations, "interval", seconds=30
-        )
+        self.scheduler.add_job(self._tick)
         self.scheduler.start()
 
     def help(self):
@@ -37,12 +34,21 @@ class Bot:
             "text": "Example help message:\nTo enrol, send me a message like: 'enrol <employee_id>'",
         }
 
+    def _tick(self):
+        print("tick", datetime.now())
+        self._check_skill_recommendations()
+        self.scheduler.add_job(self._tick, "date", run_date=self._next_tick())
+
+    def _next_tick(self) -> datetime:
+        # TODO: configure the interval
+        date = datetime.now() + timedelta(seconds=30)
+        return date
+
     def _check_skill_recommendations(self):
-        now = datetime.datetime.now()
+        now = datetime.now()
         # TODO: skip weekends and non working hours
-        print("tick", now)
         # TODO: configure the interval for skill suggestions
-        limit = datetime.timedelta(seconds=20)
+        limit = timedelta(seconds=20)
         users = self.user_db.get_users()
         for user_id, employee_id in users:
             history = self.user_db.get_history_by_user_id(user_id)
