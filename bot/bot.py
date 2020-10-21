@@ -1,4 +1,4 @@
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Callable
 
 from bot.data_api.datasource import Datasource
 from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
@@ -13,9 +13,11 @@ class User(NamedTuple):
 class Bot:
     def __init__(
         self,
+        send_message: Callable[[str, dict], bool],
         user_db: Optional[BotDatabase] = None,
         data_source: Optional[Datasource] = None,
     ):
+        self.send_message = send_message
         self.user_db: BotDatabase = user_db or BotDatabase(":memory:")
         self.data_source: Datasource = data_source or Datasource()
         self.recommender = SkillRecommenderCF(self.data_source)
