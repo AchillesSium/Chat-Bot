@@ -18,7 +18,8 @@ import yaml
 import pandas as pd
 from tqdm import tqdm
 import nltk
-from sklearn.metrics.pairwise import cosine_similarity, pairwise_distances
+from sklearn.metrics.pairwise import pairwise_distances, cosine_similarity
+from scipy.spatial.distance import cosine as cosine_distance
 from scipy import sparse
 
 # Not sure this will be correct always
@@ -93,16 +94,20 @@ def clean_one(sentence: str, settings: MutableMapping[str, Any]):
         "!",
         "?",
     ]
-
     for i in to_remove:
         sentence = sentence.replace(i, "")
 
     if settings["remove_numbers"]:
-        re.sub(r"[0-9]+\b", "", sentence)
+        sentence = re.sub(r"[0-9]+\b", "", sentence)
 
     sentence = sentence.strip()
 
     return sentence
+
+
+def split_sentence(sentence: str):
+    # return nltk.tokenize.word_tokenize(sentence)
+    return sentence.split()
 
 
 def clean_skills(data: SkillData, settings: MutableMapping[str, Any]) -> SkillData:
@@ -140,11 +145,25 @@ class SkillExtractor:
 
     @staticmethod
     def _stem_skills(skills: MutableSequence[str], stemmer: nltk.StemmerI):
+        def is_non_stem_word(the_word: str):
+            no_stem = [
+                "js",
+                "aws",
+                "kubernetes",
+                "windows",
+                "sales",
+                "jquery",
+                "apache",
+            ]
+
+            return any(the_word.lower().endswith(ns) for ns in no_stem)
+
         result = []
         for skill in skills:
-            words = nltk.tokenize.word_tokenize(skill)
+            words = split_sentence(skill)
             stemmed_skill = " ".join(
-                stemmer.stem(word) for word in words if not word.endswith("js")
+                stemmer.stem(word) if not is_non_stem_word(word) else word
+                for word in words
             )
             result.append(stemmed_skill)
 
@@ -203,6 +222,16 @@ class SkillExtractor:
                 if stemmer_name:
                     skill_feat = self._stem_skills(skill_feat, stemmer)
 
+                # Remove empty, if they exist
+                to_del = []
+                for i, s in enumerate(skill_feat):
+                    if s == "":
+                        to_del.append(i)
+
+                for i in to_del:
+                    del skill_feat[i]
+                    del no_post_skill[i]
+
                 skill_features[employee_id] = skill_feat
                 skill_key.update(
                     {
@@ -240,7 +269,7 @@ class SkillExtractor:
 
         result = []
         for s in skills:
-            words = nltk.tokenize.word_tokenize(s)
+            words = split_sentence(s)
             result.extend(w for w in words if w.lower() not in ignored)
 
         return result
@@ -281,16 +310,19 @@ class SkillExtractor:
 
 
 class SimilarityClac:
-    def __init__(self, metric_name: str):
+    def __init__(self, metric_name: str, nb_workers: int):
         self.metric = metric_name.lower()
+        self.nb_workers = nb_workers
 
         similarity_functions = {
             "cosine": self._cosine_similarity,
-            "jacc": self._jaccard_similarity,
+            "jaccard similarity": self._jaccard_similarity,
+            "dot product": self._dot_similarity,
+            "adjusted cosine": self._adjusted_cosine_similarity,
         }
 
-        for metric_name, func in similarity_functions.items():
-            if metric_name.startswith(self.metric):
+        for m, func in similarity_functions.items():
+            if m.startswith(self.metric.split("-")[0]):
                 self._similarity_func = func
                 break
         else:
@@ -302,26 +334,66 @@ class SimilarityClac:
     def __call__(self, skill_data):
         return self._similarity_func(skill_data)
 
-    @staticmethod
-    def _cosine_similarity(skill_data: pd.DataFrame):
+    def _cosine_similarity(self, skill_data: pd.DataFrame):
         """Calculate the column-wise cosine similarity for a sparse
             matrix. Return a new dataframe matrix with similarities.
         """
-        data_sparse = sparse.csr_matrix(skill_data)
-        similarities = cosine_similarity(data_sparse.transpose())
+        # data_sparse = sparse.csr_matrix(skill_data)
+        # similarities = cosine_similarity(data_sparse.transpose())
+
+        similarities = 1 - pairwise_distances(
+            skill_data.T, metric="cosine", n_jobs=self.nb_workers
+        )
 
         sim = pd.DataFrame(
             data=similarities, index=skill_data.columns, columns=skill_data.columns
         )
         return sim
 
-    @staticmethod
-    def _jaccard_similarity(skill_data: pd.DataFrame):
+    def _jaccard_similarity(self, skill_data: pd.DataFrame):
         # Jaccard similarity is 1 - hamming distance
-        jac_sim = 1 - pairwise_distances(skill_data.T, metric="hamming")
+        jac_sim = 1 - pairwise_distances(
+            skill_data.T, metric="hamming", n_jobs=self.nb_workers
+        )
 
         sim = pd.DataFrame(
             data=jac_sim, index=skill_data.columns, columns=skill_data.columns
+        )
+        return sim
+
+    def _dot_similarity(self, skill_data: pd.DataFrame):
+        def dot_similarity(item1, item2):
+            return np.dot(item1, item2)
+
+        dot = pairwise_distances(
+            skill_data.T, metric=dot_similarity, n_jobs=self.nb_workers
+        )
+
+        sim = pd.DataFrame(
+            data=dot, index=skill_data.columns, columns=skill_data.columns
+        )
+        return sim
+
+    def _adjusted_cosine_similarity(self, skill_data: pd.DataFrame):
+        metric_name = self.metric
+        alpha = float(metric_name.split("-")[-1])
+
+        def similarity(item1, item2):
+            dot = np.dot(item1, item2)
+            n1 = np.linalg.norm(item1)
+            n2 = np.linalg.norm(item2)
+            comb_n = n1 * n2
+
+            cos = 1 - (dot / comb_n)
+
+            return (comb_n ** alpha) * cos
+
+        similarities = pairwise_distances(
+            skill_data.T, metric=similarity, n_jobs=self.nb_workers
+        )
+
+        sim = pd.DataFrame(
+            data=similarities, index=skill_data.columns, columns=skill_data.columns
         )
         return sim
 
@@ -476,7 +548,9 @@ class SkillRecommenderCF:
             self._reload_options()
 
         skill_extractor = SkillExtractor(self.config["skill_features"])
-        similarity_evaluator = SimilarityClac(self.config["similarity_metric"])
+        similarity_evaluator = SimilarityClac(
+            self.config["similarity_metric"], self.config["nb_workers"]
+        )
 
         # print("Fetching skill data")
         raw_skills_by_user = clean_skills(self.ds.skills_by_user(), self.config)
@@ -645,7 +719,7 @@ if __name__ == "__main__":
     print(sep)
 
     print(f"Changing similarity_metric")
-    for metric in ["cosine", "jaccard"]:
+    for metric in ["cosine", "jaccard", "dot", "adjusted cos-0.5"]:
         print(f"Setting similarity_metric={metric}")
 
         rec.update_options(
