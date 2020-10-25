@@ -203,11 +203,11 @@ class SkillExtractor:
             for key, stemmer in stemmers.items():
                 if stemmer_name.lower().startswith(key):
                     break
-        else:
-            available = ", ".join(stemmers)
-            raise AttributeError(
-                f"Stemmer {stemmer_name!r} not recognized! Available options are: {available}"
-            )
+            else:
+                available = ", ".join(stemmers)
+                raise AttributeError(
+                    f"Stemmer {stemmer_name!r} not recognized! Available options are: {available}"
+                )
 
         skill_features = {}
         skill_key = {}
@@ -233,12 +233,7 @@ class SkillExtractor:
                     del no_post_skill[i]
 
                 skill_features[employee_id] = skill_feat
-                skill_key.update(
-                    {
-                        processed: unprocessed
-                        for processed, unprocessed in zip(skill_feat, no_post_skill)
-                    }
-                )
+                skill_key.update(zip(skill_feat, no_post_skill))
 
             else:
                 skill_features[employee_id] = None
@@ -246,7 +241,7 @@ class SkillExtractor:
         return skill_features, skill_key
 
     def _extract_words(self, skills: MutableSequence[str]):
-        ignored = [
+        ignored = {
             "a",
             "an",
             "the",
@@ -265,7 +260,7 @@ class SkillExtractor:
             "i.e.",
             "i.e",
             "ie",
-        ] + nltk.corpus.stopwords.words("english")
+        } | set(nltk.corpus.stopwords.words("english"))
 
         result = []
         for s in skills:
@@ -362,12 +357,7 @@ class SimilarityClac:
         return sim
 
     def _dot_similarity(self, skill_data: pd.DataFrame):
-        def dot_similarity(item1, item2):
-            return np.dot(item1, item2)
-
-        dot = pairwise_distances(
-            skill_data.T, metric=dot_similarity, n_jobs=self.nb_workers
-        )
+        dot = pairwise_distances(skill_data.T, metric=np.dot, n_jobs=self.nb_workers)
 
         sim = pd.DataFrame(
             data=dot, index=skill_data.columns, columns=skill_data.columns
