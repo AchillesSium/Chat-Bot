@@ -5,8 +5,8 @@ skill_features:
   stemming: 'snowball' # One of 'stem', none (or empty)
 
 remove_numbers: Yes
-similarity_metric: 'dot' # One of 'cosine', 'jaccard', 'dot', 'adjusted cosine-<alpha>' (very slow for now)
-nb_workers: 4
+similarity_metric: 'cosine' # One of 'cosine', 'jaccard', 'dot', 'adjusted cosine-<alpha>' (very slow for now)
+nb_workers: 1
 normalize_skill_vectors: No
 use_binary: Yes # If true, use only 0 and 1 for skill values, even if they appear multiple times
 rarest_allowed_skill: 3 # E.g. if == 3, skills with less than 3 employees will be ignored. <= 1 to not ignore anything
