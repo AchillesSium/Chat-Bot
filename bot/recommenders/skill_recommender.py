@@ -18,9 +18,7 @@ import yaml
 import pandas as pd
 from tqdm import tqdm
 import nltk
-from sklearn.metrics.pairwise import pairwise_distances, cosine_similarity
-from scipy.spatial.distance import cosine as cosine_distance
-from scipy import sparse
+from sklearn.metrics.pairwise import pairwise_distances
 
 # Not sure this will be correct always
 from bot.data_api.datasource import Datasource
