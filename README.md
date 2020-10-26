@@ -40,7 +40,7 @@ $ pip install -r requirements.txt
 #### Optional (for now at least):
 - Download nltk packages for language processing
 ```bash
-$  python3 -c "import nltk;nltk.download('punkt');nltk.download('averaged_perceptron_tagger')"
+$  python3 -c "import nltk;nltk.download('punkt');nltk.download('averaged_perceptron_tagger');nltk.download('stopwords')"
 ```
 
 ### Setting up the app locally for testing
