@@ -57,6 +57,11 @@ $  python3 -c "import nltk;nltk.download('punkt');nltk.download('averaged_percep
   - `commands`
   - `im:history`
   - `incoming-webhook`
+- Add the needed event subscriptions from the *Event Subscriptions* tab in the sidebar under **Features**.
+  Add the subscriptions in the **Subscribe to bot events** section. Needed events are the following:
+  - `app_mention`
+  - `message.channels`
+  - `message.im`
 - Install the app to the workspace from the *Install App* tab under **Settings**
 - Copy the necessary tokens to `.env` file
   - copy the `.env.sample` file to `.env`
