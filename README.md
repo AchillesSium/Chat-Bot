@@ -70,6 +70,9 @@ $  python3 -c "import nltk;nltk.download('punkt');nltk.download('averaged_percep
   - Make sure the file is **not** added to git
 - Install [ngrok](https://ngrok.com/download)
 
+For now, you also need to download the json-formatted sample data files `people-simple.json` and `allocation.json`
+to the parent directory of your repository.
+
 The following will need to be done for each testing session, i.e. when ever
 you restart ngrok.
 
