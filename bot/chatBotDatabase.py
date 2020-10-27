@@ -4,7 +4,7 @@ import threading
 
 
 class BotDatabase:
-    DATE_FORMAT = "%Y-%m-%d %H:%M:%s"
+    DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
     def __init__(self, db_file_name: str):
         self._lock = threading.RLock()
@@ -53,6 +53,11 @@ class BotDatabase:
     def get_user_by_employeeid(self, employee_id):
         botdb = self.connection.cursor()
         botdb.execute("SELECT * FROM users WHERE employeeId = (?)", (employee_id,))
+        return botdb.fetchall()
+
+    def get_users(self):
+        botdb = self.connection.cursor()
+        botdb.execute("SELECT * FROM users")
         return botdb.fetchall()
 
     def _parse_history(self, history):
