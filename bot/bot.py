@@ -72,7 +72,10 @@ class Bot:
         ), "exactly one of the id's must be provided"
         if employee_id is None:
             _, employee_id = self.user_db.get_user_by_id(user_id)
-        rec = self.recommender.recommend_skills_to_user(employee_id)
+        try:
+            rec = self.recommender.recommend_skills_to_user(employee_id)
+        except KeyError:
+            return []
         skills = rec.recommendation_list
         if history is None:
             history = self.user_db.get_history_by_user_id(user_id)
