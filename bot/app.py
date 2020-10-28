@@ -6,7 +6,6 @@ from slack.signature import SignatureVerifier
 from slackeventsapi import SlackEventAdapter
 
 import json
-import re
 
 from dotenv import dotenv_values, find_dotenv
 
@@ -63,7 +62,7 @@ def handle_direct_message(event_data):
     print("message", event_data)
     message = event_data["event"]
     if (
-        not message.get("bot_id")
+        not message.get("bot_id")  # don't reply to bot's own messages
         and message.get("subtype") is None
         and message.get("channel_type") == "im"
     ):
