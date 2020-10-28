@@ -118,7 +118,10 @@ class Bot:
         }
 
     def sign_off(self, user_id: str, _message: str, _match):
-        raise NotImplementedError
+        self.user_db.delete_user(user_id)
+        return {
+            "text": "Success! You are now signed-off!\nYou can come back at any time by enrolling.",
+        }
 
     def _is_enrolled(self, user_id: str) -> bool:
         try:
