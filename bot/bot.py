@@ -1,6 +1,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from typing import NamedTuple, Optional, Callable
+from typing import NamedTuple, Optional, Callable, List, Iterable
 
+import re
 from datetime import datetime, timedelta
 
 from bot.data_api.datasource import Datasource
@@ -11,6 +12,23 @@ from bot.chatBotDatabase import BotDatabase
 class User(NamedTuple):
     id: str
     employee_id: int
+
+
+class Command(NamedTuple):
+    name: str
+    match: Callable[[str], Optional[re.Match]]
+    action: Callable[[str, str, re.Match], dict]
+    requires_enrollment: bool = True
+    help_text: str = ""
+
+    @property
+    def help(self):
+        text = f"`{self.name}`"
+        if self.help_text:
+            text += "  " + self.help_text
+        if self.requires_enrollment:
+            text += "  (enrollment required)"
+        return text
 
 
 class Bot:
@@ -29,10 +47,85 @@ class Bot:
         self.scheduler.add_job(self._tick)
         self.scheduler.start()
 
+        def matcher(regex):
+            return re.compile(regex, re.IGNORECASE).match
+
+        self._commands = [
+            Command(
+                "enrol",
+                matcher(r"(?:\<@\S+\>\s+|/)?enrol+\s+(?P<id>\d+)"),
+                self.enrol_user,
+                requires_enrollment=False,
+                help_text="usage: `enrol <employee_id>`",
+            ),
+            Command("skills", matcher("skills?"), self.skills_command,),
+            Command(
+                "sign-off",
+                matcher("sign.?off"),
+                self.sign_off,
+                help_text="leave the service",
+            ),
+        ]
+
     def help(self):
         return {
-            "text": "Example help message:\nTo enrol, send me a message like: 'enrol <employee_id>'",
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "*Hi!* I understand the following commands:",
+                    },
+                },
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": "- `help` (this message)"},
+                },
+                *(
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": "- " + command.help},
+                    }
+                    for command in self._commands
+                ),
+            ]
         }
+
+    def reply(self, user_id: str, message: str):
+        """
+        Tries to match a command from the message, and replies accordingly.
+        If the message is not recognised, reply with help message.
+        """
+        enrolled = self._is_enrolled(user_id)
+        for command in self._commands:
+            if match := command.match(message):
+                if command.requires_enrollment and not enrolled:
+                    # TODO: maybe ask the user to enrol?
+                    break
+                return command.action(user_id, message, match)
+        return self.help()
+
+    def skills_command(self, user_id: str, _message: str, _match):
+        rec = self._recommendations_for(user_id=user_id, limit=None)
+        return {
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": "*Hi!* Thanks for asking"},
+                },
+                *self._format_skill_recommendations(rec)["blocks"],
+            ]
+        }
+
+    def sign_off(self, user_id: str, _message: str, _match):
+        raise NotImplementedError
+
+    def _is_enrolled(self, user_id: str) -> bool:
+        try:
+            self.user_db.get_user_by_id(user_id)
+        except KeyError:
+            return False
+        return True
 
     def _tick(self):
         print("tick", datetime.now())
@@ -95,7 +188,8 @@ class Bot:
         ]
         return {"blocks": blocks}
 
-    def enrol_user(self, user_id: str, employee_id: int):
+    def enrol_user(self, user_id: str, _message, match: re.Match):
+        employee_id = int(match.group("id"))
         if self.data_source.user_info(employee_id) is None:
             return {
                 "text": f"Hmm... There is no record for the employee id: {employee_id}"
