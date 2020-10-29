@@ -118,6 +118,10 @@ class Bot:
         blocks = [
             {
                 "type": "section",
+                "text": {"type": "mrkdwn", "text": "*Success!* You are now enrolled"},
+            },
+            {
+                "type": "section",
                 "block_id": "skill_suggestions",
                 "text": {
                     "type": "mrkdwn",
