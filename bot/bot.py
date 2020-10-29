@@ -1,5 +1,5 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from typing import NamedTuple, Optional, Callable
+from typing import NamedTuple, Optional, Callable, List
 
 from datetime import datetime, timedelta
 
@@ -107,7 +107,7 @@ class Bot:
                         "accessory": {
                             "type": "checkboxes",
                             "options": checklist_options,
-                            "action_id": "suggestion_for_skills",
+                            "action_id": "checked_suggestions",
                         },
                     },
                     {
@@ -127,6 +127,26 @@ class Bot:
             )
 
         return {"blocks": blocks}
+
+    def update_user_history(self, user_id: str, skills: List[str]):
+        now = datetime.now()
+
+        for skill in skills:
+            self.user_db.add_history(user_id, now, skill)
+
+        if len(skills) > 1:
+            skill_str = "s " + ", ".join(skills[:-1]) + f" or {skills[-1]}"
+        elif len(skills) == 1:
+            skill_str = " " + skills[0]
+        else:
+            return {
+                "text": "You did not select any skills from the list. Please select the skills that you do not want to "
+                "see in your suggestions anymore."
+            }
+
+        return {
+            "text": f"Thank you for your input! We will no longer suggest the skill{skill_str} to you."
+        }
 
     def enrol_user(self, user_id: str, employee_id: int):
         if self.data_source.user_info(employee_id) is None:

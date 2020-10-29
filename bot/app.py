@@ -44,6 +44,42 @@ def send_message(user_id, message):
 bot = Bot(send_message=send_message)
 
 
+@app.route("/slack/events/interact", methods=["POST"])
+def interaction():
+    if not signature_verifier.is_valid_request(request.get_data(), request.headers):
+        return make_response("invalid request", 403)
+
+    print(request.form)
+    json_form = json.loads(request.form.get("payload"))
+    user_id = json_form["user"]["id"]
+    action_dict = json_form["actions"][0]
+
+    if action_dict["action_id"] == "skill_suggestion_reply":
+        # This is fired when the user pushes the "Send" button
+        try:
+            selected_options = json_form["state"]["values"]["skill_suggestions"][
+                "checked_suggestions"
+            ]["selected_options"]
+            selected_skills = [
+                selected_option["value"] for selected_option in selected_options
+            ]
+        except KeyError:
+            selected_skills = []
+
+        slack_client.chat_postMessage(
+            channel=user_id, **bot.update_user_history(user_id, selected_skills)
+        )
+
+        return make_response("", 200)
+
+    elif action_dict["action_id"] == "checked_suggestions":
+        # This is fired when the user is checking the checkboxes
+        # TODO: I think it's possible to update messages. So maybe disable boxes when they're checked?
+        return make_response("", 200)
+
+    return make_response("", 404)
+
+
 @app.route("/slack/commands", methods=["POST"])
 def slash_commands():
     if not signature_verifier.is_valid_request(request.get_data(), request.headers):
