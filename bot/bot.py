@@ -107,11 +107,55 @@ class Bot:
             return {"text": "You are already enrolled!"}
 
         rec = self._recommendations_for(employee_id=employee_id, limit=None)
-        blocks = [
+        """ blocks = [
             {
                 "type": "section",
                 "text": {"type": "mrkdwn", "text": "*Success!* You are now enrolled"},
             },
             *self._format_skill_recommendations(rec)["blocks"],
-        ]
+        ] """
+
+        blocks = [
+            {
+                "type": "section",
+                "block_id": "skill_suggestions",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "Suggestion for skills"
+                },
+                "accessory": {
+                    "type": "checkboxes",
+                    "options": [
+                        ## Add loop for showing related skills for individual employee
+                        {
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": "skill_name"
+                            },
+                            "value": "skill_name"
+                        }
+                        #################################################################
+                    ],
+                    "action_id": "suggestion_for_skills"
+                }
+            },
+            {
+                "type": "actions",
+                "block_id": "skill_suggestion_button",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Send"
+                        },
+                        "style": "primary",
+                        "value": "suggestion_interation_payload",
+                        "action_id": "skill_suggestion_reply"
+                    }
+                ]
+            },
+            *self._format_skill_recommendations(rec)["blocks"],
+	    ]
+        
         return {"blocks": blocks}
