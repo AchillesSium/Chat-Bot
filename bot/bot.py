@@ -28,7 +28,7 @@ class Command(NamedTuple):
       - {"text": <the message text>}
       - {"blocks": <list of block elements>}
     """
-    requires_enrollment: bool = True
+    requires_signup: bool = True
     help_text: str = ""
 
     @property
@@ -36,8 +36,8 @@ class Command(NamedTuple):
         text = f"`{self.name}`"
         if self.help_text:
             text += "  " + self.help_text
-        if self.requires_enrollment:
-            text += "  (enrollment required)"
+        if self.requires_signup:
+            text += "  (signing up required)"
         return text
 
 
@@ -62,22 +62,22 @@ class Bot:
 
         self._commands = [
             Command(
-                "enrol",
+                "sign-up",
                 # Matches
                 #   optional mention or '/'  (this is not captured as a group)
-                #   'enrol' followed by any number of trailing 'l's
+                #   'sign' (optional character, e.g. '-' or ' ') 'up'
                 #   one or more space
                 #   one or more digits (captured in group called 'id')
                 # The mention is received in the form: '<@' slack_id '>'
                 # but the user types and sees: '@' slack_name
                 # Examples
-                #   <@ABCD123EFGH> enroll 123
-                #   /enrol   4
-                #   enrollll 567
-                matcher(r"(?:\<@\S+\>\s+|/)?enrol+\s+(?P<id>\d+)"),
-                self.enrol_user,
-                requires_enrollment=False,
-                help_text="usage: `enrol <employee_id>`",
+                #   <@ABCD123EFGH> sign-up 123
+                #   /signup   4
+                #   sign up 567
+                matcher(r"(?:\<@\S+\>\s+|/)?sign.?up\s+(?P<id>\d+)"),
+                self.sign_up,
+                requires_signup=False,
+                help_text="usage: `sign-up <employee_id>`",
             ),
             Command("skills", matcher("skills?"), self.skills_command,),
             Command(
@@ -117,11 +117,10 @@ class Bot:
         Tries to match a command from the message, and replies accordingly.
         If the message is not recognised, reply with help message.
         """
-        enrolled = self._is_enrolled(user_id)
+        signed_up = self._is_signed_up(user_id)
         for command in self._commands:
             if match := command.match(message):
-                if command.requires_enrollment and not enrolled:
-                    # TODO: maybe ask the user to enrol?
+                if command.requires_signup and not signed_up:
                     break
                 return command.action(user_id, message, match)
         return self.help()
@@ -141,10 +140,10 @@ class Bot:
     def sign_off(self, user_id: str, _message: str, _match):
         self.user_db.delete_user(user_id)
         return {
-            "text": "Success! You are now signed-off!\nYou can come back at any time by enrolling.",
+            "text": "Success! You are now signed-off!\nYou can come back at any time by signing up.",
         }
 
-    def _is_enrolled(self, user_id: str) -> bool:
+    def _is_signed_up(self, user_id: str) -> bool:
         try:
             self.user_db.get_user_by_id(user_id)
         except KeyError:
@@ -212,7 +211,7 @@ class Bot:
         ]
         return {"blocks": blocks}
 
-    def enrol_user(self, user_id: str, _message, match: re.Match):
+    def sign_up(self, user_id: str, _message, match: re.Match):
         employee_id = int(match.group("id"))
         if self.data_source.user_info(employee_id) is None:
             return {
@@ -222,13 +221,13 @@ class Bot:
         try:
             self.user_db.add_user(user_id, employee_id)
         except KeyError:
-            return {"text": "You are already enrolled!"}
+            return {"text": "You are already signed-up!"}
 
         rec = self._recommendations_for(employee_id=employee_id, limit=None)
         blocks = [
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": "*Success!* You are now enrolled"},
+                "text": {"type": "mrkdwn", "text": "*Success!* You are now signed-up"},
             },
             *self._format_skill_recommendations(rec)["blocks"],
         ]
