@@ -1,6 +1,7 @@
 from flask import Flask, Response, request, make_response
 
 from slack import WebClient
+from slack.errors import SlackApiError
 from slack.signature import SignatureVerifier
 from slackeventsapi import SlackEventAdapter
 
@@ -22,9 +23,25 @@ app = Flask(__name__)
 slack_client = WebClient(SLACK_API_TOKEN)
 slack_events_adapter = SlackEventAdapter(SLACK_SIGNING_SECRET, "/slack/events", app)
 
-bot = Bot()
-
 signature_verifier = SignatureVerifier(SLACK_SIGNING_SECRET)
+
+
+def send_message(user_id, message):
+    response = slack_client.api_call(
+        api_method="conversations.open", json={"users": user_id}
+    )
+    try:
+        response.validate()
+        channel_id = response["channel"]["id"]
+        result = slack_client.chat_postMessage(channel=channel_id, **message)
+        result.validate()
+    except SlackApiError as e:
+        print(repr(e))
+        return False
+    return True
+
+
+bot = Bot(send_message=send_message)
 
 
 @app.route("/slack/commands", methods=["POST"])
