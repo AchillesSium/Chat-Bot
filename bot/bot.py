@@ -18,6 +18,16 @@ class Command(NamedTuple):
     name: str
     match: Callable[[str], Optional[re.Match]]
     action: Callable[[str, str, re.Match], dict]
+    """
+    Function responsible for the action associated with the command
+    parameters:
+      - user_id
+      - message body
+      - match object, from matching the message with command's match attribute
+    returns: dictionary of elements for slack message, e.g.
+      - {"text": <the message text>}
+      - {"blocks": <list of block elements>}
+    """
     requires_enrollment: bool = True
     help_text: str = ""
 
@@ -53,6 +63,17 @@ class Bot:
         self._commands = [
             Command(
                 "enrol",
+                # Matches
+                #   optional mention or '/'  (this is not captured as a group)
+                #   'enrol' followed by any number of trailing 'l's
+                #   one or more space
+                #   one or more digits (captured in group called 'id')
+                # The mention is received in the form: '<@' slack_id '>'
+                # but the user types and sees: '@' slack_name
+                # Examples
+                #   <@ABCD123EFGH> enroll 123
+                #   /enrol   4
+                #   enrollll 567
                 matcher(r"(?:\<@\S+\>\s+|/)?enrol+\s+(?P<id>\d+)"),
                 self.enrol_user,
                 requires_enrollment=False,
