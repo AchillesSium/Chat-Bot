@@ -86,7 +86,7 @@ class Bot:
 
     def _format_skill_recommendations(self, recommendation_list):
         if recommendation_list:
-            text = "We found these skills similar to yours:\n"
+            text = "Based on you profile, we found some skills that you might also have, but which are not listed on your profile.\n"
         else:
             text = "We found no skills to suggest this time"
 
@@ -103,7 +103,10 @@ class Bot:
                     {
                         "type": "section",
                         "block_id": "skill_suggestions",
-                        "text": {"type": "mrkdwn", "text": "Suggestion for skills"},
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "Please select the skills you *do not* want to see in your suggestions anymore",
+                        },
                         "accessory": {
                             "type": "checkboxes",
                             "options": checklist_options,
