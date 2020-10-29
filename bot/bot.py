@@ -59,10 +59,10 @@ class Bot:
             rec = self._recommendations_for(employee_id=employee_id, history=history)
             if not rec:
                 continue
-            ok = self.send_message(user_id, self._format_skill_recommendations(rec))
-            if ok:
-                for skill in rec:
-                    self.user_db.add_history(user_id, now, skill)
+            _ = self.send_message(user_id, self._format_skill_recommendations(rec))
+            # if ok:
+            #     for skill in rec:
+            #         self.user_db.add_history(user_id, now, skill)
 
     def _recommendations_for(
         self, *, user_id=None, employee_id=None, history=None, limit=2
@@ -86,13 +86,46 @@ class Bot:
 
     def _format_skill_recommendations(self, recommendation_list):
         if recommendation_list:
-            skills = "\n".join(f"- {r}" for r in recommendation_list)
-            text = "We found these skills similar to yours:\n" + skills
+            text = "We found these skills similar to yours:\n"
         else:
             text = "We found no skills to suggest this time"
-        blocks = [
-            {"type": "section", "text": {"type": "mrkdwn", "text": text,},},
-        ]
+
+        blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": text},}]
+
+        if recommendation_list:
+            checklist_options = [
+                {"text": {"type": "mrkdwn", "text": f"*{rec}*"}, "value": rec}
+                for rec in recommendation_list
+            ]
+
+            blocks.extend(
+                [
+                    {
+                        "type": "section",
+                        "block_id": "skill_suggestions",
+                        "text": {"type": "mrkdwn", "text": "Suggestion for skills"},
+                        "accessory": {
+                            "type": "checkboxes",
+                            "options": checklist_options,
+                            "action_id": "suggestion_for_skills",
+                        },
+                    },
+                    {
+                        "type": "actions",
+                        "block_id": "skill_suggestion_button",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "text": {"type": "plain_text", "text": "Send"},
+                                "style": "primary",
+                                "value": "reply_to_suggestions",
+                                "action_id": "skill_suggestion_reply",
+                            }
+                        ],
+                    },
+                ]
+            )
+
         return {"blocks": blocks}
 
     def enrol_user(self, user_id: str, employee_id: int):
@@ -107,59 +140,12 @@ class Bot:
             return {"text": "You are already enrolled!"}
 
         rec = self._recommendations_for(employee_id=employee_id, limit=None)
-        """ blocks = [
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": "*Success!* You are now enrolled"},
-            },
-            *self._format_skill_recommendations(rec)["blocks"],
-        ] """
-
         blocks = [
             {
                 "type": "section",
                 "text": {"type": "mrkdwn", "text": "*Success!* You are now enrolled"},
             },
-            {
-                "type": "section",
-                "block_id": "skill_suggestions",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "Suggestion for skills"
-                },
-                "accessory": {
-                    "type": "checkboxes",
-                    "options": [
-                        ## Add loop for showing related skills for individual employee
-                        {
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": "skill_name"
-                            },
-                            "value": "skill_name"
-                        }
-                        #################################################################
-                    ],
-                    "action_id": "suggestion_for_skills"
-                }
-            },
-            {
-                "type": "actions",
-                "block_id": "skill_suggestion_button",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Send"
-                        },
-                        "style": "primary",
-                        "value": "suggestion_interation_payload",
-                        "action_id": "skill_suggestion_reply"
-                    }
-                ]
-            },
             *self._format_skill_recommendations(rec)["blocks"],
-	    ]
-        
+        ]
+
         return {"blocks": blocks}
