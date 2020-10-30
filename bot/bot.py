@@ -1,5 +1,5 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from typing import NamedTuple, Optional, Callable
+from typing import NamedTuple, Optional, Callable, List
 
 from datetime import datetime, timedelta
 
@@ -59,10 +59,10 @@ class Bot:
             rec = self._recommendations_for(employee_id=employee_id, history=history)
             if not rec:
                 continue
-            ok = self.send_message(user_id, self._format_skill_recommendations(rec))
-            if ok:
-                for skill in rec:
-                    self.user_db.add_history(user_id, now, skill)
+            _ = self.send_message(user_id, self._format_skill_recommendations(rec))
+            # if ok:
+            #     for skill in rec:
+            #         self.user_db.add_history(user_id, now, skill)
 
     def _recommendations_for(
         self, *, user_id=None, employee_id=None, history=None, limit=2
@@ -86,14 +86,70 @@ class Bot:
 
     def _format_skill_recommendations(self, recommendation_list):
         if recommendation_list:
-            skills = "\n".join(f"- {r}" for r in recommendation_list)
-            text = "We found these skills similar to yours:\n" + skills
+            text = "Based on you profile, we found some skills that you might also have, but which are not listed on your profile.\n"
         else:
             text = "We found no skills to suggest this time"
-        blocks = [
-            {"type": "section", "text": {"type": "mrkdwn", "text": text,},},
-        ]
+
+        blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": text},}]
+
+        if recommendation_list:
+            checklist_options = [
+                {"text": {"type": "mrkdwn", "text": f"*{rec}*"}, "value": rec}
+                for rec in recommendation_list
+            ]
+
+            blocks.extend(
+                [
+                    {
+                        "type": "section",
+                        "block_id": "skill_suggestions",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "Please select the skills you *do not* want to see in your suggestions anymore",
+                        },
+                        "accessory": {
+                            "type": "checkboxes",
+                            "options": checklist_options,
+                            "action_id": "checked_suggestions",
+                        },
+                    },
+                    {
+                        "type": "actions",
+                        "block_id": "skill_suggestion_button",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "text": {"type": "plain_text", "text": "Send"},
+                                "style": "primary",
+                                "value": "reply_to_suggestions",
+                                "action_id": "skill_suggestion_reply",
+                            }
+                        ],
+                    },
+                ]
+            )
+
         return {"blocks": blocks}
+
+    def update_user_history(self, user_id: str, skills: List[str]):
+        now = datetime.now()
+
+        for skill in skills:
+            self.user_db.add_history(user_id, now, skill)
+
+        if len(skills) > 1:
+            skill_str = "s " + ", ".join(skills[:-1]) + f" or {skills[-1]}"
+        elif len(skills) == 1:
+            skill_str = " " + skills[0]
+        else:
+            return {
+                "text": "You did not select any skills from the list. Please select the skills that you do not want to "
+                "see in your suggestions anymore."
+            }
+
+        return {
+            "text": f"Thank you for your input! We will no longer suggest the skill{skill_str} to you."
+        }
 
     def enrol_user(self, user_id: str, employee_id: int):
         if self.data_source.user_info(employee_id) is None:
@@ -114,4 +170,5 @@ class Bot:
             },
             *self._format_skill_recommendations(rec)["blocks"],
         ]
+
         return {"blocks": blocks}
