@@ -85,7 +85,7 @@ class BotDatabase:
         self.delete_history_by_user_id(user_id)
         with self._lock, self.connection as conn:
             botdb = conn.cursor()
-            botdb.execute("DELETE FROM users WHERE user_id = (?)", (user_id,))
+            botdb.execute("DELETE FROM users WHERE id = (?)", (user_id,))
 
     def delete_history_by_user_id(self, user_id):
         with self._lock, self.connection as conn:

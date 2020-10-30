@@ -1,6 +1,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from typing import NamedTuple, Optional, Callable, List
+from typing import NamedTuple, Optional, Callable, List, Iterable
 
+import re
 from datetime import datetime, timedelta
 
 from bot.data_api.datasource import Datasource
@@ -11,6 +12,33 @@ from bot.chatBotDatabase import BotDatabase
 class User(NamedTuple):
     id: str
     employee_id: int
+
+
+class Command(NamedTuple):
+    name: str
+    match: Callable[[str], Optional[re.Match]]
+    action: Callable[[str, str, re.Match], dict]
+    """
+    Function responsible for the action associated with the command
+    parameters:
+      - user_id
+      - message body
+      - match object, from matching the message with command's match attribute
+    returns: dictionary of elements for slack message, e.g.
+      - {"text": <the message text>}
+      - {"blocks": <list of block elements>}
+    """
+    requires_signup: bool = True
+    help_text: str = ""
+
+    @property
+    def help(self):
+        text = f"`{self.name}`"
+        if self.help_text:
+            text += "  " + self.help_text
+        if self.requires_signup:
+            text += "  (signing up required)"
+        return text
 
 
 class Bot:
@@ -29,10 +57,98 @@ class Bot:
         self.scheduler.add_job(self._tick)
         self.scheduler.start()
 
+        def matcher(regex):
+            return re.compile(regex, re.IGNORECASE).match
+
+        self._commands = [
+            Command(
+                "sign-up",
+                # Matches
+                #   optional mention or '/'  (this is not captured as a group)
+                #   'sign' (optional character, e.g. '-' or ' ') 'up'
+                #   one or more space
+                #   one or more digits (captured in group called 'id')
+                # The mention is received in the form: '<@' slack_id '>'
+                # but the user types and sees: '@' slack_name
+                # Examples
+                #   <@ABCD123EFGH> sign-up 123
+                #   /signup   4
+                #   sign up 567
+                matcher(r"(?:\<@\S+\>\s+|/)?sign.?up\s+(?P<id>\d+)"),
+                self.sign_up,
+                requires_signup=False,
+                help_text="usage: `sign-up <employee_id>`",
+            ),
+            Command("skills", matcher("skills?"), self.skills_command,),
+            Command(
+                "sign-off",
+                matcher("sign.?off"),
+                self.sign_off,
+                help_text="leave the service",
+            ),
+        ]
+
     def help(self):
         return {
-            "text": "Example help message:\nTo enrol, send me a message like: 'enrol <employee_id>'",
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "*Hi!* I understand the following commands:",
+                    },
+                },
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": "- `help` (this message)"},
+                },
+                *(
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": "- " + command.help},
+                    }
+                    for command in self._commands
+                ),
+            ]
         }
+
+    def reply(self, user_id: str, message: str):
+        """
+        Tries to match a command from the message, and replies accordingly.
+        If the message is not recognised, reply with help message.
+        """
+        signed_up = self._is_signed_up(user_id)
+        for command in self._commands:
+            if match := command.match(message):
+                if command.requires_signup and not signed_up:
+                    break
+                return command.action(user_id, message, match)
+        return self.help()
+
+    def skills_command(self, user_id: str, _message: str, _match):
+        rec = self._recommendations_for(user_id=user_id, limit=None)
+        return {
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": "*Hi!* Thanks for asking"},
+                },
+                *self._format_skill_recommendations(rec)["blocks"],
+            ]
+        }
+
+    def sign_off(self, user_id: str, _message: str, _match):
+        self.user_db.delete_user(user_id)
+        return {
+            "text": "Success! You are now signed-off!\nYou can come back at any time by signing up.",
+        }
+
+    def _is_signed_up(self, user_id: str) -> bool:
+        try:
+            self.user_db.get_user_by_id(user_id)
+        except KeyError:
+            return False
+        return True
 
     def _tick(self):
         print("tick", datetime.now())
@@ -151,7 +267,8 @@ class Bot:
             "text": f"Thank you for your input! We will no longer suggest the skill{skill_str} to you."
         }
 
-    def enrol_user(self, user_id: str, employee_id: int):
+    def sign_up(self, user_id: str, _message, match: re.Match):
+        employee_id = int(match.group("id"))
         if self.data_source.user_info(employee_id) is None:
             return {
                 "text": f"Hmm... There is no record for the employee id: {employee_id}"
@@ -160,13 +277,13 @@ class Bot:
         try:
             self.user_db.add_user(user_id, employee_id)
         except KeyError:
-            return {"text": "You are already enrolled!"}
+            return {"text": "You are already signed-up!"}
 
         rec = self._recommendations_for(employee_id=employee_id, limit=None)
         blocks = [
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": "*Success!* You are now enrolled"},
+                "text": {"type": "mrkdwn", "text": "*Success!* You are now signed-up"},
             },
             *self._format_skill_recommendations(rec)["blocks"],
         ]

@@ -6,7 +6,6 @@ from slack.signature import SignatureVerifier
 from slackeventsapi import SlackEventAdapter
 
 import json
-import re
 
 from dotenv import dotenv_values, find_dotenv
 
@@ -85,20 +84,12 @@ def slash_commands():
     if not signature_verifier.is_valid_request(request.get_data(), request.headers):
         return make_response("invalid request", 403)
     print(request.form)
-    if request.form.get("command") == "/enrol":
-        try:
-            user_id = request.form["user_id"]
-            employee_id = int(request.form["text"])
-            return {
-                **bot.enrol_user(user_id, employee_id),
-                "response_type": "ephemeral",
-            }
-        except Exception as e:
-            print(f"error: {e!r}")
-            return {
-                **bot.help(),
-                "response_type": "ephemeral",
-            }
+    if command := request.form.get("command"):
+        user_id = request.form["user_id"]
+        return {
+            **bot.reply(user_id, command + " " + request.form["text"]),
+            "response_type": "ephemeral",
+        }
     return make_response("", 404)
 
 
@@ -106,18 +97,16 @@ def slash_commands():
 def handle_direct_message(event_data):
     print("message", event_data)
     message = event_data["event"]
-    if message.get("subtype") is None and message.get("channel_type") == "im":
+    if (
+        not message.get("bot_id")  # don't reply to bot's own messages
+        and message.get("subtype") is None
+        and message.get("channel_type") == "im"
+    ):
         command = message.get("text")
-        match = re.match(r"(?:\<@\S+\>\s+)?enrol+\s+(\d+)", command, re.IGNORECASE)
         user = message["user"]
         channel = message["channel"]
-        if match:
-            employee_id = int(match.group(1))
-            response = bot.enrol_user(user, employee_id)
-            slack_client.chat_postEphemeral(channel=channel, user=user, **response)
-            return Response(status=200)
-        response = bot.help()
-        slack_client.chat_postEphemeral(channel=channel, user=user, **response)
+        response = bot.reply(user, command)
+        slack_client.chat_postMessage(channel=channel, user=user, **response)
     return Response(status=200)
 
 
