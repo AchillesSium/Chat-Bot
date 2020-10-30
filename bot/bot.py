@@ -1,5 +1,5 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from typing import NamedTuple, Optional, Callable, List, Iterable
+from typing import NamedTuple, Optional, Callable, List, Iterable, Dict, Any, Tuple
 
 import re
 from datetime import datetime, timedelta
@@ -9,10 +9,13 @@ from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecomme
 from bot.chatBotDatabase import BotDatabase
 
 
+BotReply = Dict[str, Any]
+
+
 class Command(NamedTuple):
     name: str
     match: Callable[[str], Optional[re.Match]]
-    action: Callable[[str, str, re.Match], dict]
+    action: Callable[[str, str, re.Match], BotReply]
     """
     Function responsible for the action associated with the command
     parameters:
@@ -28,6 +31,7 @@ class Command(NamedTuple):
 
     @property
     def help(self):
+        "Formatted help text for the command"
         text = f"`{self.name}`"
         if self.help_text:
             text += "  " + self.help_text
@@ -83,7 +87,7 @@ class Bot:
             ),
         ]
 
-    def help(self):
+    def help(self) -> BotReply:
         return {
             "blocks": [
                 {
@@ -107,10 +111,15 @@ class Bot:
             ]
         }
 
-    def reply(self, user_id: str, message: str):
+    def reply(self, user_id: str, message: str) -> BotReply:
         """
         Tries to match a command from the message, and replies accordingly.
         If the message is not recognised, reply with help message.
+
+        :param user_id: Slack user id
+        :param message: message body
+
+        :return: reply to message
         """
         signed_up = self._is_signed_up(user_id)
         for command in self._commands:
@@ -120,7 +129,7 @@ class Bot:
                 return command.action(user_id, message, match)
         return self.help()
 
-    def skills_command(self, user_id: str, _message: str, _match):
+    def skills_command(self, user_id: str, _message: str, _match) -> BotReply:
         rec = self._recommendations_for(user_id=user_id, limit=None)
         return {
             "blocks": [
@@ -132,7 +141,7 @@ class Bot:
             ]
         }
 
-    def sign_off(self, user_id: str, _message: str, _match):
+    def sign_off(self, user_id: str, _message: str, _match) -> BotReply:
         self.user_db.delete_user(user_id)
         return {
             "text": "Success! You are now signed-off!\nYou can come back at any time by signing up.",
@@ -170,14 +179,30 @@ class Bot:
             rec = self._recommendations_for(employee_id=employee_id, history=history)
             if not rec:
                 continue
-            _ = self.send_message(user_id, self._format_skill_recommendations(rec))
-            # if ok:
-            #     for skill in rec:
-            #         self.user_db.add_history(user_id, now, skill)
+            self.send_message(user_id, self._format_skill_recommendations(rec))
 
     def _recommendations_for(
-        self, *, user_id=None, employee_id=None, history=None, limit=2
+        self,
+        *,
+        user_id: str = None,
+        employee_id: int = None,
+        history: Iterable[Tuple[Any, Any, str]] = None,
+        limit: Optional[int] = 2,
     ):
+        """Return list of recommendations for user.
+
+        Exactly one of user_id or employee_id must be given.
+
+        The history is used to exclude those items from recommendations.
+        When None, history is fetched from the database.
+
+        :param user_id: Slack user id
+        :param employee_id: Vincit employee id
+        :param history: recommendations to exclude
+        :param limit: maximum number of recommendations to return, use None for no limit
+
+        :return: list of recommendations
+        """
         assert (user_id is None) ^ (
             employee_id is None
         ), "exactly one of the id's must be provided"
@@ -195,7 +220,7 @@ class Bot:
         previous = {item for _id, _date, item in history}
         return [item for item in skills if item not in previous][:limit]
 
-    def _format_skill_recommendations(self, recommendation_list):
+    def _format_skill_recommendations(self, recommendation_list) -> BotReply:
         if recommendation_list:
             text = "Based on you profile, we found some skills that you might also have, but which are not listed on your profile.\n"
         else:
@@ -262,7 +287,14 @@ class Bot:
             "text": f"Thank you for your input! We will no longer suggest the skill{skill_str} to you."
         }
 
-    def sign_up(self, user_id: str, _message, match: re.Match):
+    def sign_up(self, user_id: str, _message, match: re.Match) -> BotReply:
+        """Sign user up and return initial recommendations
+
+        :param user_id: Slack user id
+        :param match: match object containing the employee id
+
+        :return: reply with recommendations or error message
+        """
         employee_id = int(match.group("id"))
         if self.data_source.user_info(employee_id) is None:
             return {

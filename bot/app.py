@@ -26,6 +26,13 @@ signature_verifier = SignatureVerifier(SLACK_SIGNING_SECRET)
 
 
 def send_message(user_id, message):
+    """Send direct message to the user from the bot.
+
+    :param user_id: Slack user id
+    :param message: message as dictionary
+
+    :return: True if sending succeeds
+    """
     response = slack_client.api_call(
         api_method="conversations.open", json={"users": user_id}
     )
