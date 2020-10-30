@@ -9,11 +9,6 @@ from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecomme
 from bot.chatBotDatabase import BotDatabase
 
 
-class User(NamedTuple):
-    id: str
-    employee_id: int
-
-
 class Command(NamedTuple):
     name: str
     match: Callable[[str], Optional[re.Match]]
