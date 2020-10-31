@@ -6,13 +6,17 @@ from slack.signature import SignatureVerifier
 from slackeventsapi import SlackEventAdapter
 
 import json
+import os
 
-from dotenv import dotenv_values, find_dotenv
+from dotenv import load_dotenv, find_dotenv
 
 from .bot import Bot
 
 # Get the tokens from .env file (.env.sample in version control)
-ENV = dotenv_values(find_dotenv())
+# Use load_dotenv to enable overwriting the values from system environment
+# variables, or from commandline
+load_dotenv(find_dotenv())
+ENV = os.environ
 SLACK_SIGNING_SECRET = ENV["SLACK_SIGNING_SECRET"]
 SLACK_API_TOKEN = ENV["SLACK_API_TOKEN"]
 
@@ -47,7 +51,10 @@ def send_message(user_id, message):
     return True
 
 
-bot = Bot(send_message=send_message)
+CRON = ENV["BOT_CHECK_SCHEDULE"]
+INTERVAL = int(ENV["BOT_DAYS_BETWEEN_MESSAGES"])
+
+bot = Bot(send_message=send_message, check_schedule=CRON, message_interval=INTERVAL)
 
 
 @app.route("/slack/events/interact", methods=["POST"])

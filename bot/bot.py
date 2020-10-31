@@ -1,4 +1,5 @@
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from typing import NamedTuple, Optional, Callable, List, Iterable, Dict, Any, Tuple
 
 import re
@@ -44,6 +45,8 @@ class Bot:
     def __init__(
         self,
         send_message: Callable[[str, dict], bool],
+        check_schedule: str,
+        message_interval: int,
         user_db: Optional[BotDatabase] = None,
         data_source: Optional[Datasource] = None,
     ):
@@ -52,8 +55,10 @@ class Bot:
         self.data_source: Datasource = data_source or Datasource()
         self.recommender = SkillRecommenderCF(self.data_source)
 
+        self._message_interval = timedelta(days=message_interval)
+
         self.scheduler = BackgroundScheduler()
-        self.scheduler.add_job(self._tick)
+        self.scheduler.add_job(self._tick, CronTrigger.from_crontab(check_schedule))
         self.scheduler.start()
 
         def matcher(regex):
@@ -157,24 +162,15 @@ class Bot:
     def _tick(self):
         print("tick", datetime.now())
         self._check_skill_recommendations()
-        self.scheduler.add_job(self._tick, "date", run_date=self._next_tick())
-
-    def _next_tick(self) -> datetime:
-        # TODO: configure the interval
-        date = datetime.now() + timedelta(seconds=30)
-        return date
 
     def _check_skill_recommendations(self):
         now = datetime.now()
-        # TODO: skip weekends and non working hours
-        # TODO: configure the interval for skill suggestions
-        limit = timedelta(seconds=20)
         users = self.user_db.get_users()
         for user_id, employee_id in users:
             history = self.user_db.get_history_by_user_id(user_id)
             if history:
                 last = history[0][1]
-                if now - last < limit:
+                if now - last < self._message_interval:
                     continue
             rec = self._recommendations_for(employee_id=employee_id, history=history)
             if not rec:
