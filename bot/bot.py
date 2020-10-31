@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from bot.data_api.datasource import Datasource
 from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
-from bot.chatBotDatabase import BotDatabase
+from bot.chatBotDatabase import BotDatabase, User, HistoryEntry
 
 
 BotReply = Dict[str, Any]
@@ -136,6 +136,7 @@ class Bot:
 
     def skills_command(self, user_id: str, _message: str, _match) -> BotReply:
         rec = self._recommendations_for(user_id=user_id, limit=None)
+        self.user_db.set_next_reminder(user_id, datetime.now() + self._message_interval)
         return {
             "blocks": [
                 {
@@ -165,25 +166,22 @@ class Bot:
 
     def _check_skill_recommendations(self):
         now = datetime.now()
-        users = self.user_db.get_users()
-        for user_id, employee_id in users:
-            history = self.user_db.get_history_by_user_id(user_id)
-            if history:
-                last = history[0][1]
-                if now - last < self._message_interval:
-                    continue
-            rec = self._recommendations_for(employee_id=employee_id, history=history)
+        for user in self.user_db.get_users():
+            if user.remind_next and user.remind_next > now:
+                continue
+            rec = self._recommendations_for(employee_id=user.employee_id)
             if not rec:
                 continue
-            self.send_message(user_id, self._format_skill_recommendations(rec))
+            self.user_db.set_next_reminder(user.user_id, now + self._message_interval)
+            self.send_message(user.user_id, self._format_skill_recommendations(rec))
 
     def _recommendations_for(
         self,
         *,
         user_id: str = None,
         employee_id: int = None,
-        history: Iterable[Tuple[Any, Any, str]] = None,
-        limit: Optional[int] = 2,
+        history: Iterable[HistoryEntry] = None,
+        limit: Optional[int] = 5,
     ):
         """Return list of recommendations for user.
 
@@ -203,13 +201,19 @@ class Bot:
             employee_id is None
         ), "exactly one of the id's must be provided"
         if employee_id is None:
-            _, employee_id = self.user_db.get_user_by_id(user_id)
+            assert user_id is not None
+            user = self.user_db.get_user_by_id(user_id)
+            employee_id = user.employee_id
         try:
             rec = self.recommender.recommend_skills_to_user(employee_id)
         except KeyError:
             return []
         skills = rec.recommendation_list
         if history is None:
+            if user_id is None:
+                assert employee_id is not None
+                [user] = self.user_db.get_user_by_employeeid(employee_id)
+                user_id = user.user_id
             history = self.user_db.get_history_by_user_id(user_id)
         if not history:
             return skills[:limit]
@@ -298,11 +302,13 @@ class Bot:
             }
 
         try:
-            self.user_db.add_user(user_id, employee_id)
+            self.user_db.add_user(
+                User(user_id, employee_id, datetime.now() + self._message_interval)
+            )
         except KeyError:
             return {"text": "You are already signed-up!"}
 
-        rec = self._recommendations_for(employee_id=employee_id, limit=None)
+        rec = self._recommendations_for(employee_id=employee_id)
         blocks = [
             {
                 "type": "section",
