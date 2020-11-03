@@ -12,6 +12,7 @@ from typing import (
     Set,
     Tuple,
     Dict,
+    List,
 )
 
 import yaml
@@ -29,6 +30,10 @@ YAML = NewType("YAML", MutableMapping[str, Any])
 
 @dataclass
 class SkillRecommendation:
+    """
+    Helper class for skill recommendations
+    """
+
     recommendation_list: MutableSequence[str]
     similarities: MutableSequence[float]
     most_similar_to: MutableSequence[str]
@@ -53,23 +58,22 @@ def recursive_update_dict(dict1, dict2):
 
 
 def read_yaml(path: Path) -> YAML:
-    """ Read yaml into dict from path
+    """ Read yaml file
 
-    @param path: yaml file path
-    @return: yaml dict
+    :param path: Input path
+    :return: Dict containing the contents of the input file
     """
     with path.open("r") as f:
         return yaml.safe_load(f)
 
 
-def clean_one(sentence: str, settings: MutableMapping[str, Any]):
+def clean_one(sentence: str, settings: MutableMapping[str, Any]) -> str:
     """ Clean a sentence.
     Includes stripping whitespace, removing non-characters.
 
     :param sentence: Sentence to clean
-    :type sentence: str
+    :param settings: Settings
     :return: Cleaned sentence
-    :rtype: str
     """
     to_remove = [
         "\u2022",
@@ -103,7 +107,13 @@ def clean_one(sentence: str, settings: MutableMapping[str, Any]):
     return sentence
 
 
-def split_sentence(sentence: str):
+def split_sentence(sentence: str) -> List[str]:
+    """ Split a sentence to words
+    (Easier to change implementation)
+
+    :param sentence: Sentence to split
+    :return: List of words
+    """
     # return nltk.tokenize.word_tokenize(sentence)
     return sentence.split()
 
@@ -113,6 +123,7 @@ def clean_skills(data: SkillData, settings: MutableMapping[str, Any]) -> SkillDa
     Includes stripping whitespace, removing non-characters.
 
     :param data: Data to clean
+    :param settings: Settings to use when cleaning
     :return: Cleaned data
     """
     cleaned_data = {}
@@ -172,8 +183,8 @@ class SkillExtractor:
     ) -> Tuple[SkillData, Dict[str, str]]:
         """ Create new SkillData dict with extracted features
 
-        @param data: Raw
-        @return:
+        @param data: Raw skill data
+        @return: Skill data with extracted skill features
         """
         skill_feat_type = self.config["feature_type"]
         feat_functions = {
@@ -515,7 +526,12 @@ class SkillRecommenderCF:
         if reinitialize:
             self.initialize_recommender(reload_options=False)
 
-    def get_user_skills(self, user_id: int):
+    def get_user_skills(self, user_id: int) -> List[str]:
+        """ Get extracted skill features of user
+
+        :param user_id: User's user id
+        :return: List of skill features
+        """
         if user_id in self.skill_index.index:
             user_skills = [
                 skill for skill, sc in self.skill_index.loc[user_id].items() if sc > 0
@@ -528,6 +544,12 @@ class SkillRecommenderCF:
     def initialize_recommender(
         self, ds: Optional[Datasource] = None, reload_options: bool = True
     ):
+        """ (Re)initialize recommender
+        Reconstructs skill index, similarity matrix, and possibly the neighbourhoods
+
+        :param ds: Datasource object to use
+        :param reload_options: Whether or not to also reload options from yaml file
+        """
         if ds is not None:
             self.ds = ds
 
@@ -561,9 +583,17 @@ class SkillRecommenderCF:
         # print("Init done!")
 
     def clear_recommendation_history(self):
+        """
+        Clear recommendation history
+        """
         self.recommendation_history.clear()
 
     def update_recommendation_history(self, user_id: int, skill: str):
+        """ Update recommendation history
+
+        :param user_id: User's user id
+        :param skill: Skill to add to user's history
+        """
         self.recommendation_history[user_id].add(skill)
 
     def recommend_skills_to_user(
@@ -571,10 +601,10 @@ class SkillRecommenderCF:
     ) -> SkillRecommendation:
         """ Recommend skills to user based on CF
 
-        @param user_id: ID of employee for whom to recommend skills
-        @param nb_recommendations: How many recommendations to make
-        @param nb_most_similar: How many "most similar" skills of the user to list
-        @return: List of skills recommended to user, their similarities and what they are most similar to
+        :param user_id: ID of employee to whom to recommend skills
+        :param nb_recommendations: How many recommendations to make
+        :param nb_most_similar: How many "most similar" existing skills of the user to list
+        :return: Recommendations in a SkillRecommendation object
         """
         user_skills = self.get_user_skills(user_id)
 
