@@ -66,6 +66,13 @@ class Bot:
 
         self._commands = [
             Command(
+                "help",
+                matcher("help"),
+                self.help,
+                requires_signup=False,
+                help_text="(this message)",
+            ),
+            Command(
                 "sign-up",
                 # Matches
                 #   optional mention or '/'  (this is not captured as a group)
@@ -92,7 +99,7 @@ class Bot:
             ),
         ]
 
-    def help(self) -> BotReply:
+    def help(self, *_) -> BotReply:
         return {
             "blocks": [
                 {
@@ -101,10 +108,6 @@ class Bot:
                         "type": "mrkdwn",
                         "text": "*Hi!* I understand the following commands:",
                     },
-                },
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": "- `help` (this message)"},
                 },
                 *(
                     {
