@@ -135,7 +135,41 @@ class Bot:
                 if command.requires_signup and not signed_up:
                     break
                 return command.action(user_id, message, match)
-        return self.help()
+        return self.find_candidates(message)
+
+    def find_candidates(self, message):
+        "Find candidate employees who have particular skills"
+
+        skills = {s.strip() for s in message.split(",")}
+
+        # TODO: find the actual free people with the skills
+        people = [{"id": 123, "matching_skills": ("js", "angular")}]
+
+        if not people:
+            return {"text": "I could not find anyone available with those skills"}
+
+        blocks = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "I found the following employees who are free next",
+                },
+            }
+        ]
+
+        for person in people[:5]:
+            id_ = person["id"]
+            skill = ", ".join(person["matching_skills"])
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"*{id_}* with skills: {skill}"},
+                }
+            )
+
+        # TODO: add button to fetch more people, if available
+        return {"blocks": blocks}
 
     def skills_command(self, user_id: str, _message: str, _match) -> BotReply:
         rec = self._recommendations_for(user_id=user_id, limit=None)
