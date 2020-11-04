@@ -212,7 +212,7 @@ class Bot:
             history = self.user_db.get_history_by_user_id(user_id)
         previous = {item for _id, _date, item in history}
         try:
-            nb_recs = limit if limit is not None else 10
+            nb_recs = limit if limit is not None else 4
             rec = self.recommender.recommend_skills_to_user(
                 employee_id, nb_recs, ignored_skills=list(previous)
             )
@@ -220,7 +220,9 @@ class Bot:
             return []
         return rec.recommendation_list
 
-    def _format_skill_recommendations(self, recommendation_list) -> BotReply:
+    def _format_skill_recommendations(
+        self, recommendation_list, *, already_selected=[]
+    ) -> BotReply:
         if recommendation_list:
             text = "Based on you profile, we found some skills that you might also have, but which are not listed on your profile.\n"
         else:
@@ -232,52 +234,89 @@ class Bot:
             checklist_options = [
                 {"text": {"type": "mrkdwn", "text": f"*{rec}*"}, "value": rec}
                 for rec in recommendation_list
+            ][:10]
+            already_checked = [
+                {"text": {"type": "mrkdwn", "text": f"*{rec}*"}, "value": rec}
+                for rec in already_selected
             ]
+            accessory = {
+                "type": "checkboxes",
+                "options": checklist_options,
+                "action_id": "checked_suggestions",
+            }
 
-            blocks.extend(
-                [
-                    {
-                        "type": "section",
-                        "block_id": "skill_suggestions",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": "Please select the skills you *do not* want to see in your suggestions anymore",
+            if len(already_checked) > 0:
+                accessory["initial_options"] = already_checked
+
+            blocks.append(
+                {
+                    "type": "section",
+                    "block_id": "skill_suggestions",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "Please select the skills you *do not* want to see in your suggestions anymore",
+                    },
+                    "accessory": accessory,
+                }
+            )
+
+            if len(checklist_options) < 10:
+                blocks.extend(
+                    [
+                        {
+                            "type": "actions",
+                            "elements": [
+                                {
+                                    "type": "button",
+                                    "text": {"type": "plain_text", "text": "Show more"},
+                                    "value": str(len(checklist_options)),
+                                    "action_id": "show_more_suggestions",
+                                }
+                            ],
                         },
-                        "accessory": {
-                            "type": "checkboxes",
-                            "options": checklist_options,
-                            "action_id": "checked_suggestions",
-                        },
-                    },
-                    {
-                        "type": "actions",
-                        "elements": [
-                            {
-                                "type": "button",
-                                "text": {"type": "plain_text", "text": "Show more"},
-                                "value": str(len(checklist_options)),
-                                "action_id": "show_more_suggestions",
-                            }
-                        ],
-                    },
-                    {"type": "divider"},
-                    {
-                        "type": "actions",
-                        "block_id": "skill_suggestion_button",
-                        "elements": [
-                            {
-                                "type": "button",
-                                "text": {"type": "plain_text", "text": "Send"},
-                                "style": "primary",
-                                "value": "reply_to_suggestions",
-                                "action_id": "skill_suggestion_reply",
-                            }
-                        ],
-                    },
-                ]
+                        {"type": "divider"},
+                    ]
+                )
+
+            blocks.append(
+                {
+                    "type": "actions",
+                    "block_id": "skill_suggestion_button",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "Send"},
+                            "style": "primary",
+                            "value": "reply_to_suggestions",
+                            "action_id": "skill_suggestion_reply",
+                        }
+                    ],
+                }
             )
 
         return {"blocks": blocks}
+
+    def show_more_skills(
+        self,
+        user_id: str,
+        nb_already_suggested: int,
+        *,
+        increment_by: int = 2,
+        already_selected: List[str] = [],
+    ) -> BotReply:
+        """ Return skill recommendation message with more suggestions
+
+        :param user_id: User ID of the user for whom to suggest skills
+        :param nb_already_suggested: How many skills have already been suggested
+        :param increment_by: How many more skills to suggest
+        :return: Reply with (more) skill suggestions
+        """
+        rec = self._recommendations_for(
+            user_id=user_id, limit=nb_already_suggested + increment_by
+        )
+        return self._format_skill_recommendations(
+            rec, already_selected=already_selected
+        )
 
     def update_user_history(self, user_id: str, skills: List[str]):
         now = datetime.now()

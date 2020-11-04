@@ -59,18 +59,31 @@ def interaction():
     json_form = json.loads(request.form.get("payload"))
     user_id = json_form["user"]["id"]
     action_dict = json_form["actions"][0]
+    print(json_form["container"])
 
-    if action_dict["action_id"] == "skill_suggestion_reply":
-        # This is fired when the user pushes the "Send" button
+    def get_selected_skills():
         try:
             selected_options = json_form["state"]["values"]["skill_suggestions"][
                 "checked_suggestions"
             ]["selected_options"]
-            selected_skills = [
-                selected_option["value"] for selected_option in selected_options
-            ]
+            result = [selected_option["value"] for selected_option in selected_options]
         except KeyError:
-            selected_skills = []
+            result = []
+
+        for block in json_form["message"]["blocks"]:
+            if block["block_id"] == "skill_suggestions":
+                acc = block["accessory"]
+                init_opts = acc.get("initial_options")
+
+                if init_opts is not None:
+                    for i in init_opts:
+                        result.append(i["value"])
+
+        return list(set(result))
+
+    if action_dict["action_id"] == "skill_suggestion_reply":
+        # This is fired when the user pushes the "Send" button
+        selected_skills = get_selected_skills()
 
         slack_client.chat_postMessage(
             channel=user_id, **bot.update_user_history(user_id, selected_skills)
@@ -82,6 +95,20 @@ def interaction():
         # This is fired when the user is checking the checkboxes
         # TODO: I think it's possible to update messages. So maybe disable boxes when they're checked?
         return make_response("", 200)
+
+    elif action_dict["action_id"] == "show_more_suggestions":
+        og_timestamp = json_form["container"]["message_ts"]
+        channel = json_form["channel"]["id"]
+        nb_already_suggested = int(action_dict["value"])
+
+        selected_skills = get_selected_skills()
+        formatted_suggestions = bot.show_more_skills(
+            user_id, nb_already_suggested, already_selected=selected_skills
+        )
+
+        slack_client.chat_update(
+            channel=channel, ts=og_timestamp, **formatted_suggestions
+        )
 
     return make_response("", 404)
 
