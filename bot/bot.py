@@ -251,6 +251,18 @@ class Bot:
                     },
                     {
                         "type": "actions",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "text": {"type": "plain_text", "text": "Show more"},
+                                "value": len(checklist_options),
+                                "action_id": "show_more_suggestions",
+                            }
+                        ],
+                    },
+                    {"type": "divider"},
+                    {
+                        "type": "actions",
                         "block_id": "skill_suggestion_button",
                         "elements": [
                             {
