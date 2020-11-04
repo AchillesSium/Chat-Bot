@@ -208,17 +208,17 @@ class Bot:
         ), "exactly one of the id's must be provided"
         if employee_id is None:
             _, employee_id = self.user_db.get_user_by_id(user_id)
-        try:
-            rec = self.recommender.recommend_skills_to_user(employee_id)
-        except KeyError:
-            return []
-        skills = rec.recommendation_list
         if history is None:
             history = self.user_db.get_history_by_user_id(user_id)
-        if not history:
-            return skills[:limit]
         previous = {item for _id, _date, item in history}
-        return [item for item in skills if item not in previous][:limit]
+        try:
+            nb_recs = limit if limit is not None else 10
+            rec = self.recommender.recommend_skills_to_user(
+                employee_id, nb_recs, ignored_skills=list(previous)
+            )
+        except KeyError:
+            return []
+        return rec.recommendation_list
 
     def _format_skill_recommendations(self, recommendation_list) -> BotReply:
         if recommendation_list:
@@ -255,7 +255,7 @@ class Bot:
                             {
                                 "type": "button",
                                 "text": {"type": "plain_text", "text": "Show more"},
-                                "value": len(checklist_options),
+                                "value": str(len(checklist_options)),
                                 "action_id": "show_more_suggestions",
                             }
                         ],

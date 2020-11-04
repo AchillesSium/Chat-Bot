@@ -597,13 +597,18 @@ class SkillRecommenderCF:
         self.recommendation_history[user_id].add(skill)
 
     def recommend_skills_to_user(
-        self, user_id: int, nb_recommendations: int = 10, nb_most_similar: int = 5
+        self,
+        user_id: int,
+        nb_recommendations: int = 10,
+        nb_most_similar: int = 5,
+        ignored_skills: MutableSequence[str] = [],
     ) -> SkillRecommendation:
         """ Recommend skills to user based on CF
 
         :param user_id: ID of employee to whom to recommend skills
         :param nb_recommendations: How many recommendations to make
         :param nb_most_similar: How many "most similar" existing skills of the user to list
+        :param ignored_skills: What skills not to include in the recommendations (recommendation history)
         :return: Recommendations in a SkillRecommendation object
         """
         user_skills = self.get_user_skills(user_id)
@@ -637,6 +642,8 @@ class SkillRecommenderCF:
         score = score.drop(user_skills)
         # Drop already-recommended skills
         score = score.drop(self.recommendation_history[user_id])
+        # Drop ignored skills
+        score = score.drop(ignored_skills)
 
         # Get top recommendations
         recommendations = score.nlargest(nb_recommendations)
