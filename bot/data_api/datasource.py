@@ -108,6 +108,13 @@ class Datasource:
                 )
         return result
 
+    def get_users(self):
+        """ Get the list of
+
+        :return: list of users as JSON
+        """
+        return self.users
+
 
 if __name__ == "__main__":
     # For debugging
