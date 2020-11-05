@@ -222,7 +222,7 @@ class Bot:
         return rec.recommendation_list
 
     def _format_skill_recommendations(
-        self, recommendation_list, *, already_selected=[], message_id=""
+        self, recommendation_list, *, already_selected=(), message_id=""
     ) -> BotReply:
         if recommendation_list:
             text = "Based on you profile, we found some skills that you might also have, but which are not listed on your profile.\n"
@@ -316,7 +316,7 @@ class Bot:
         nb_already_suggested: int,
         *,
         increment_by: int = 2,
-        already_selected: List[str] = [],
+        already_selected: Iterable[str] = (),
         message_id: str = "",
     ) -> BotReply:
         """ Return skill recommendation message with more suggestions

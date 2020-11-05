@@ -62,14 +62,15 @@ def interaction():
 
     def get_selected_skills():
         sep = "___"
+        result = set()
         try:
             selected_options = json_form["state"]["values"]["skill_suggestions"][
                 "checked_suggestions"
             ]["selected_options"]
-            result = [
+            result.update(
                 selected_option["value"].split(sep)[0]
                 for selected_option in selected_options
-            ]
+            )
         except KeyError:
             result = []
 
@@ -80,9 +81,9 @@ def interaction():
 
                 if init_opts is not None:
                     for i in init_opts:
-                        result.append(i["value"].split(sep)[0])
+                        result.add(i["value"].split(sep)[0])
 
-        return list(set(result))
+        return list(result)
 
     if action_dict["action_id"] == "skill_suggestion_reply":
         # This is fired when the user pushes the "Send" button

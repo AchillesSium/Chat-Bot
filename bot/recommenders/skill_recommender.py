@@ -13,6 +13,7 @@ from typing import (
     Tuple,
     Dict,
     List,
+    Iterable,
 )
 
 import yaml
@@ -630,7 +631,7 @@ class SkillRecommenderCF:
         user_id: int,
         nb_recommendations: int = 10,
         nb_most_similar: int = 5,
-        ignored_skills: MutableSequence[str] = [],
+        ignored_skills: Iterable[str] = (),
     ) -> SkillRecommendation:
         """ Recommend skills to user based on CF
 
