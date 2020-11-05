@@ -68,10 +68,10 @@ class Bot:
         self._commands = [
             Command(
                 "help",
-                matcher("help"),
+                matcher("help(?:\s+(?P<topic>\w+))?"),
                 self.help,
                 requires_signup=False,
-                help_text="(this message)",
+                help_text="help for the bot or a specific command, usage: `help [command]`",
             ),
             Command(
                 "sign-up",
@@ -98,9 +98,19 @@ class Bot:
                 self.sign_off,
                 help_text="leave the service",
             ),
+            Command(
+                "find",
+                matcher("find\s+(w\d{1,2}\s+)?(.*)"),
+                self.find_candidates,
+                help_text="find candidates with certain skills",
+            ),
         ]
 
-    def help(self, *_) -> BotReply:
+    def help(
+        self, _user_id: str = None, _message: str = None, match: re.Match = None
+    ) -> BotReply:
+        if match and (topic := match.group("topic")):
+            return {"text": f"help for topic: {topic}"}
         return {
             "blocks": [
                 {
@@ -136,15 +146,16 @@ class Bot:
                 if command.requires_signup and not signed_up:
                     break
                 return command.action(user_id, message, match)
-        return self.find_candidates(message)
+        return self.help()
 
-    def find_candidates(self, message):
+    def find_candidates(self, _user_id: str, _message: str, match: re.Match):
         "Find candidate employees who have particular skills"
 
-        skills = {s.strip() for s in message.split(",")}
+        starting_week, skills = match.groups()
+        skills = {s.strip().lower() for s in skills.split(",")}
 
         # TODO: find the actual free people with the skills
-        people = [{"id": 123, "matching_skills": ("js", "angular")}]
+        people = [(123, "js", "angular")]
 
         if not people:
             return {"text": "I could not find anyone available with those skills"}
@@ -159,13 +170,14 @@ class Bot:
             }
         ]
 
-        for person in people[:5]:
-            id_ = person["id"]
-            skill = ", ".join(person["matching_skills"])
+        for employee_id, *skill in people[:5]:
             blocks.append(
                 {
                     "type": "section",
-                    "text": {"type": "mrkdwn", "text": f"*{id_}* with skills: {skill}"},
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*{employee_id}* with skills: {', '.join(skill)}",
+                    },
                 }
             )
 
