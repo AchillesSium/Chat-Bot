@@ -152,6 +152,42 @@ class SkillExtractor:
         """
         self.chunker = nltk.RegexpParser(chunker_patterns)
 
+        skill_feat_type = self.config["feature_type"]
+        feat_functions = {
+            "noun": self._extract_noun_phrases,
+            "skill": self._extract_skills,
+            "word": self._extract_words,
+        }
+        stemmer_name = self.config["stemming"]
+        stemmers = {
+            "porter": nltk.PorterStemmer(),
+            "snowball": nltk.SnowballStemmer("english"),
+            "lanc": nltk.LancasterStemmer(),
+        }
+        # Python dictionaries guarantee insertion ordering starting from 3.7
+        for key, feat_func in feat_functions.items():
+            if skill_feat_type.lower().startswith(key):
+                self.feat_func = feat_func
+                break
+        else:
+            available = ", ".join(feat_functions)
+            raise AttributeError(
+                f"Skill feature {skill_feat_type!r} not recognized! Available options are: {available}"
+            )
+
+        if stemmer_name:
+            for key, stemmer in stemmers.items():
+                if stemmer_name.lower().startswith(key):
+                    self.stemmer = stemmer
+                    break
+            else:
+                available = ", ".join(stemmers)
+                raise AttributeError(
+                    f"Stemmer {stemmer_name!r} not recognized! Available options are: {available}"
+                )
+        else:
+            self.stemmer = None
+
     @staticmethod
     def _stem_skills(skills: MutableSequence[str], stemmer: nltk.StemmerI):
         def is_non_stem_word(the_word: str):
@@ -178,6 +214,35 @@ class SkillExtractor:
 
         return result
 
+    def post_process_skill_features(
+        self, skill_features: MutableSequence[str]
+    ) -> Tuple[List[str], List[str]]:
+        """ Do post-processing on skill features (e.g. lowercase, stemming) according to settings
+
+        :param skill_features: Skill features to process
+        :return: Skill features before and after processing
+        """
+        skill_features = list(skill_features)
+        no_post_skill = skill_features
+
+        if self.config["use_lowercase"]:
+            skill_features = [s.lower() for s in skill_features]
+
+        if self.stemmer:
+            skill_features = self._stem_skills(skill_features, self.stemmer)
+
+        # Remove empty, if they exist
+        to_del = []
+        for i, s in enumerate(skill_features):
+            if s == "":
+                to_del.append(i)
+
+        for i in to_del:
+            del skill_features[i]
+            del no_post_skill[i]
+
+        return no_post_skill, skill_features
+
     def extract_skill_features(
         self, data: SkillData
     ) -> Tuple[SkillData, Dict[str, str]]:
@@ -186,62 +251,14 @@ class SkillExtractor:
         @param data: Raw skill data
         @return: Skill data with extracted skill features
         """
-        skill_feat_type = self.config["feature_type"]
-        feat_functions = {
-            "noun": self._extract_noun_phrases,
-            "skill": self._extract_skills,
-            "word": self._extract_words,
-        }
-        stemmer_name = self.config["stemming"]
-        stemmers = {
-            "porter": nltk.PorterStemmer(),
-            "snowball": nltk.SnowballStemmer("english"),
-            "lanc": nltk.LancasterStemmer(),
-        }
-        # Python dictionaries guarantee insertion ordering starting from 3.7
-        for key, feat_func in feat_functions.items():
-            if skill_feat_type.lower().startswith(key):
-                break
-        else:
-            available = ", ".join(feat_functions)
-            raise AttributeError(
-                f"Skill feature {skill_feat_type!r} not recognized! Available options are: {available}"
-            )
-
-        if stemmer_name:
-            for key, stemmer in stemmers.items():
-                if stemmer_name.lower().startswith(key):
-                    break
-            else:
-                available = ", ".join(stemmers)
-                raise AttributeError(
-                    f"Stemmer {stemmer_name!r} not recognized! Available options are: {available}"
-                )
-
         skill_features = {}
         interim_skill_key = defaultdict(set)
         no_post_skill_counter = Counter()
         for employee_id, skills in data.items():
             if skills is not None:
-                skill_feat = feat_func(skills)
-                no_post_skill = skill_feat
+                skill_feat = self.feat_func(skills)
+                no_post_skill, skill_feat = self.post_process_skill_features(skill_feat)
                 no_post_skill_counter.update(no_post_skill)
-
-                if self.config["use_lowercase"]:
-                    skill_feat = [s.lower() for s in skill_feat]
-
-                if stemmer_name:
-                    skill_feat = self._stem_skills(skill_feat, stemmer)
-
-                # Remove empty, if they exist
-                to_del = []
-                for i, s in enumerate(skill_feat):
-                    if s == "":
-                        to_del.append(i)
-
-                for i in to_del:
-                    del skill_feat[i]
-                    del no_post_skill[i]
 
                 skill_features[employee_id] = skill_feat
                 # Store which skill features correspond to which "human-readable" skills
@@ -569,7 +586,7 @@ class SkillRecommenderCF:
         if reload_options:
             self._reload_options()
 
-        skill_extractor = SkillExtractor(self.config["skill_features"])
+        self.skill_extractor = SkillExtractor(self.config["skill_features"])
         similarity_evaluator = SimilarityClac(
             self.config["similarity_metric"], self.config["nb_workers"]
         )
@@ -578,7 +595,7 @@ class SkillRecommenderCF:
         raw_skills_by_user = clean_skills(self.ds.skills_by_user(), self.config)
 
         # print("Extracting skill features")
-        user_skills, skill_key = skill_extractor.extract_skill_features(
+        user_skills, skill_key = self.skill_extractor.extract_skill_features(
             raw_skills_by_user
         )
         self.skill_key = skill_key
@@ -655,6 +672,12 @@ class SkillRecommenderCF:
         # Drop already-recommended skills
         score = score.drop(self.recommendation_history[user_id])
         # Drop ignored skills
+        # If the recommender converts skill features back to "human-readable", this has to be reversed for the
+        # ignored skills.
+        if self.config["convert_back"]:
+            _, ignored_skills = self.skill_extractor.post_process_skill_features(
+                ignored_skills
+            )
         score = score.drop(ignored_skills)
 
         # Get top recommendations
