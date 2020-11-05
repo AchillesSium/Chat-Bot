@@ -2,6 +2,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from typing import NamedTuple, Optional, Callable, List, Iterable, Dict, Any, Tuple
 
 import re
+from time import time
 from datetime import datetime, timedelta
 
 from bot.data_api.datasource import Datasource
@@ -221,7 +222,7 @@ class Bot:
         return rec.recommendation_list
 
     def _format_skill_recommendations(
-        self, recommendation_list, *, already_selected=[]
+        self, recommendation_list, *, already_selected=[], message_id=""
     ) -> BotReply:
         if recommendation_list:
             text = "Based on you profile, we found some skills that you might also have, but which are not listed on your profile.\n"
@@ -231,14 +232,23 @@ class Bot:
         blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": text},}]
 
         if recommendation_list:
+            if not message_id:
+                message_id = str(int(time() * 100))
+            sep = "___"
             # Slack cannot show more than 10 options at a time
             checklist_options = [
-                {"text": {"type": "mrkdwn", "text": f"*{rec}*"}, "value": rec}
+                {
+                    "text": {"type": "mrkdwn", "text": f"*{rec}*"},
+                    "value": f"{rec}{sep}{message_id}",
+                }
                 for rec in recommendation_list
             ][:10]
             # Do not include init options if already added to the history
             already_checked = [
-                {"text": {"type": "mrkdwn", "text": f"*{rec}*"}, "value": rec}
+                {
+                    "text": {"type": "mrkdwn", "text": f"*{rec}*"},
+                    "value": f"{rec}{sep}{message_id}",
+                }
                 for rec in already_selected
                 if rec in recommendation_list
             ]
@@ -264,6 +274,7 @@ class Bot:
             )
 
             if len(checklist_options) < 10:
+                # Slack can only show 10 at a time, so don't give the "Show more" option if there are already 10 options
                 blocks.extend(
                     [
                         {
@@ -272,7 +283,7 @@ class Bot:
                                 {
                                     "type": "button",
                                     "text": {"type": "plain_text", "text": "Show more"},
-                                    "value": str(len(checklist_options)),
+                                    "value": f"{str(len(checklist_options))}{sep}{message_id}",
                                     "action_id": "show_more_suggestions",
                                 }
                             ],
@@ -290,7 +301,7 @@ class Bot:
                             "type": "button",
                             "text": {"type": "plain_text", "text": "Send"},
                             "style": "primary",
-                            "value": "reply_to_suggestions",
+                            "value": f"reply_to_suggestions_{message_id}",
                             "action_id": "skill_suggestion_reply",
                         }
                     ],
@@ -306,6 +317,7 @@ class Bot:
         *,
         increment_by: int = 2,
         already_selected: List[str] = [],
+        message_id: str = "",
     ) -> BotReply:
         """ Return skill recommendation message with more suggestions
 
@@ -313,13 +325,14 @@ class Bot:
         :param nb_already_suggested: How many skills have already been suggested
         :param increment_by: How many more skills to suggest
         :param already_selected: Which skills have already been selected in the checkboxes
+        :param message_id: Optional message id to concatenate to option values (to prevent weird slack behaviour)
         :return: Reply with (more) skill suggestions
         """
         rec = self._recommendations_for(
             user_id=user_id, limit=nb_already_suggested + increment_by
         )
         return self._format_skill_recommendations(
-            rec, already_selected=already_selected
+            rec, already_selected=already_selected, message_id=message_id
         )
 
     def update_user_history(self, user_id: str, skills: List[str]):

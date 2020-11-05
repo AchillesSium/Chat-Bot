@@ -59,14 +59,17 @@ def interaction():
     json_form = json.loads(request.form.get("payload"))
     user_id = json_form["user"]["id"]
     action_dict = json_form["actions"][0]
-    print(json_form["container"])
 
     def get_selected_skills():
+        sep = "___"
         try:
             selected_options = json_form["state"]["values"]["skill_suggestions"][
                 "checked_suggestions"
             ]["selected_options"]
-            result = [selected_option["value"] for selected_option in selected_options]
+            result = [
+                selected_option["value"].split(sep)[0]
+                for selected_option in selected_options
+            ]
         except KeyError:
             result = []
 
@@ -77,7 +80,7 @@ def interaction():
 
                 if init_opts is not None:
                     for i in init_opts:
-                        result.append(i["value"])
+                        result.append(i["value"].split(sep)[0])
 
         return list(set(result))
 
@@ -93,17 +96,20 @@ def interaction():
 
     elif action_dict["action_id"] == "checked_suggestions":
         # This is fired when the user is checking the checkboxes
-        # TODO: I think it's possible to update messages. So maybe disable boxes when they're checked?
         return make_response("", 200)
 
     elif action_dict["action_id"] == "show_more_suggestions":
         og_timestamp = json_form["container"]["message_ts"]
         channel = json_form["channel"]["id"]
-        nb_already_suggested = int(action_dict["value"])
+        nb_already_suggested, message_id = action_dict["value"].split("___")
+        nb_already_suggested = int(nb_already_suggested)
 
         selected_skills = get_selected_skills()
         formatted_suggestions = bot.show_more_skills(
-            user_id, nb_already_suggested, already_selected=selected_skills
+            user_id,
+            nb_already_suggested,
+            already_selected=selected_skills,
+            message_id=message_id,
         )
 
         slack_client.chat_update(
