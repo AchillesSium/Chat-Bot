@@ -219,11 +219,13 @@ class SkillExtractor:
                 )
 
         skill_features = {}
-        skill_key = {}
+        interim_skill_key = defaultdict(set)
+        no_post_skill_counter = Counter()
         for employee_id, skills in data.items():
             if skills is not None:
                 skill_feat = feat_func(skills)
                 no_post_skill = skill_feat
+                no_post_skill_counter.update(no_post_skill)
 
                 if self.config["use_lowercase"]:
                     skill_feat = [s.lower() for s in skill_feat]
@@ -242,10 +244,20 @@ class SkillExtractor:
                     del no_post_skill[i]
 
                 skill_features[employee_id] = skill_feat
-                skill_key.update(zip(skill_feat, no_post_skill))
+                # Store which skill features correspond to which "human-readable" skills
+                # E.g. with stemming and lowercase: design -> Designing, Designed, Designer, Design
+                for skill, np_skill in zip(skill_feat, no_post_skill):
+                    interim_skill_key[skill].add(np_skill)
 
             else:
                 skill_features[employee_id] = None
+
+        # Out of all the corresponding "human-readable" skills,
+        # take the most common one and link it with the skill feature
+        skill_key = {
+            skill: max(np_skills, key=lambda s: no_post_skill_counter[s])
+            for skill, np_skills in interim_skill_key.items()
+        }
 
         return skill_features, skill_key
 
