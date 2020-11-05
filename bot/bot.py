@@ -231,13 +231,16 @@ class Bot:
         blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": text},}]
 
         if recommendation_list:
+            # Slack cannot show more than 10 options at a time
             checklist_options = [
                 {"text": {"type": "mrkdwn", "text": f"*{rec}*"}, "value": rec}
                 for rec in recommendation_list
             ][:10]
+            # Do not include init options if already added to the history
             already_checked = [
                 {"text": {"type": "mrkdwn", "text": f"*{rec}*"}, "value": rec}
                 for rec in already_selected
+                if rec in recommendation_list
             ]
             accessory = {
                 "type": "checkboxes",
@@ -309,6 +312,7 @@ class Bot:
         :param user_id: User ID of the user for whom to suggest skills
         :param nb_already_suggested: How many skills have already been suggested
         :param increment_by: How many more skills to suggest
+        :param already_selected: Which skills have already been selected in the checkboxes
         :return: Reply with (more) skill suggestions
         """
         rec = self._recommendations_for(
