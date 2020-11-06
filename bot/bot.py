@@ -4,8 +4,6 @@ from typing import NamedTuple, Optional, Callable, List, Iterable, Dict, Any, Tu
 import re
 from datetime import datetime, timedelta
 
-import json
-
 from bot.data_api.datasource import Datasource
 from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
 from bot.chatBotDatabase import BotDatabase
@@ -319,21 +317,18 @@ class Bot:
 
         return {"blocks": blocks}
 
-    def find_person_by_skills(self, skills_array: List):
+    def find_person_by_skills(self, skills_array: List[str]):
         """Look for people with a certain set of skills.
 
         :param skills_array: A list containing names of requested skills.
         :return: A List object containing found persons.
         """
         # Go through bot's database for people.
-        list_of_users = json.load(self.user_db.get_users())
+        list_of_users = self.data_source.get_users()
         list_of_matching_people = []
-        matching_person_holder = []  # Holds worker_id and matched skills.
-        for person in list_of_users:
+        for person in list_of_users.values():
             # Go through all the people in the API
-            matching_person_holder = (
-                []
-            )  # Empty the holder at the beginning of each loop.
+            matching_person_holder = []  # Holds worker_id and matched skills.
             for requested_skill in skills_array:
                 # Look for matches in list of requested skills.
                 if requested_skill in person["skills"]:
