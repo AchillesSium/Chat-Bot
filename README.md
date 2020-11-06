@@ -77,6 +77,11 @@ The following will need to be done for each testing session, i.e. when ever
 you restart ngrok.
 
 - Activate the virtual environment
+- To configure the automatic checks, use the environment variables
+  `BOT_CHECK_SCHEDULE` and `BOT_DAYS_BETWEEN_MESSAGES`. The
+  shortest interval (once a minute) can be achieved by setting:
+  - `export BOT_CHECK_SCHEDULE="* * * * *"`
+  - `export BOT_DAYS_BETWEEN_MESSAGES=0`
 - Start the bot application `python -m bot.app`
 - Check the port the app is listening (should be 3000) and start a tunnel with
   `ngrok http <PORT_NUMBER>`
