@@ -11,6 +11,7 @@ import os
 from dotenv import load_dotenv, find_dotenv
 
 from .bot import Bot
+from .chatBotDatabase import BotDatabase
 
 # Get the tokens from .env file (.env.sample in version control)
 # Use load_dotenv to enable overwriting the values from system environment
@@ -54,7 +55,14 @@ def send_message(user_id, message):
 CRON = ENV["BOT_CHECK_SCHEDULE"]
 INTERVAL = int(ENV["BOT_DAYS_BETWEEN_MESSAGES"])
 
-bot = Bot(send_message=send_message, check_schedule=CRON, message_interval=INTERVAL)
+DB_FILE = ENV["DB_FILE"]
+
+bot = Bot(
+    send_message=send_message,
+    check_schedule=CRON,
+    message_interval=INTERVAL,
+    user_db=BotDatabase(DB_FILE),
+)
 
 
 @app.route("/slack/events/interact", methods=["POST"])
