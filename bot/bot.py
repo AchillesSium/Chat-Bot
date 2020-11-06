@@ -3,6 +3,7 @@ from apscheduler.triggers.cron import CronTrigger
 from typing import NamedTuple, Optional, Callable, List, Iterable, Dict, Any, Tuple
 
 import re
+from time import time
 from datetime import datetime, timedelta
 
 from bot.data_api.datasource import Datasource
@@ -135,7 +136,7 @@ class Bot:
         return self.help()
 
     def skills_command(self, user_id: str, _message: str, _match) -> BotReply:
-        rec = self._recommendations_for(user_id=user_id, limit=None)
+        rec = self._recommendations_for(user_id=user_id)
         self.user_db.set_next_reminder(user_id, datetime.now() + self._message_interval)
         return {
             "blocks": [
@@ -180,8 +181,8 @@ class Bot:
         *,
         user_id: str = None,
         employee_id: int = None,
+        limit: Optional[int] = 4,
         history: Iterable[HistoryEntry] = None,
-        limit: Optional[int] = 5,
     ):
         """Return list of recommendations for user.
 
@@ -193,7 +194,7 @@ class Bot:
         :param user_id: Slack user id
         :param employee_id: Vincit employee id
         :param history: recommendations to exclude
-        :param limit: maximum number of recommendations to return, use None for no limit
+        :param limit: number of recommendations to return
 
         :return: list of recommendations
         """
@@ -204,23 +205,24 @@ class Bot:
             assert user_id is not None
             user = self.user_db.get_user_by_id(user_id)
             employee_id = user.employee_id
-        try:
-            rec = self.recommender.recommend_skills_to_user(employee_id)
-        except KeyError:
-            return []
-        skills = rec.recommendation_list
         if history is None:
             if user_id is None:
                 assert employee_id is not None
                 [user] = self.user_db.get_user_by_employeeid(employee_id)
                 user_id = user.user_id
             history = self.user_db.get_history_by_user_id(user_id)
-        if not history:
-            return skills[:limit]
         previous = {item for _id, _date, item in history}
-        return [item for item in skills if item not in previous][:limit]
+        try:
+            rec = self.recommender.recommend_skills_to_user(
+                employee_id, limit, ignored_skills=list(previous)
+            )
+        except KeyError:
+            return []
+        return rec.recommendation_list
 
-    def _format_skill_recommendations(self, recommendation_list) -> BotReply:
+    def _format_skill_recommendations(
+        self, recommendation_list, *, already_selected=(), message_id=""
+    ) -> BotReply:
         if recommendation_list:
             text = "Based on you profile, we found some skills that you might also have, but which are not listed on your profile.\n"
         else:
@@ -229,43 +231,108 @@ class Bot:
         blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": text},}]
 
         if recommendation_list:
+            if not message_id:
+                message_id = str(int(time() * 100))
+            sep = "___"
+            # Slack cannot show more than 10 options at a time
             checklist_options = [
-                {"text": {"type": "mrkdwn", "text": f"*{rec}*"}, "value": rec}
+                {
+                    "text": {"type": "mrkdwn", "text": f"*{rec}*"},
+                    "value": f"{rec}{sep}{message_id}",
+                }
                 for rec in recommendation_list
+            ][:10]
+            # Do not include init options if already added to the history
+            already_checked = [
+                {
+                    "text": {"type": "mrkdwn", "text": f"*{rec}*"},
+                    "value": f"{rec}{sep}{message_id}",
+                }
+                for rec in already_selected
+                if rec in recommendation_list
             ]
+            accessory = {
+                "type": "checkboxes",
+                "options": checklist_options,
+                "action_id": "checked_suggestions",
+            }
 
-            blocks.extend(
-                [
-                    {
-                        "type": "section",
-                        "block_id": "skill_suggestions",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": "Please select the skills you *do not* want to see in your suggestions anymore",
-                        },
-                        "accessory": {
-                            "type": "checkboxes",
-                            "options": checklist_options,
-                            "action_id": "checked_suggestions",
-                        },
+            if len(already_checked) > 0:
+                accessory["initial_options"] = already_checked
+
+            blocks.append(
+                {
+                    "type": "section",
+                    "block_id": "skill_suggestions",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "Please select the skills you *do not* want to see in your suggestions anymore",
                     },
-                    {
-                        "type": "actions",
-                        "block_id": "skill_suggestion_button",
-                        "elements": [
-                            {
-                                "type": "button",
-                                "text": {"type": "plain_text", "text": "Send"},
-                                "style": "primary",
-                                "value": "reply_to_suggestions",
-                                "action_id": "skill_suggestion_reply",
-                            }
-                        ],
-                    },
-                ]
+                    "accessory": accessory,
+                }
+            )
+
+            if len(checklist_options) < 10:
+                # Slack can only show 10 at a time, so don't give the "Show more" option if there are already 10 options
+                blocks.extend(
+                    [
+                        {
+                            "type": "actions",
+                            "elements": [
+                                {
+                                    "type": "button",
+                                    "text": {"type": "plain_text", "text": "Show more"},
+                                    "value": f"{str(len(checklist_options))}{sep}{message_id}",
+                                    "action_id": "show_more_suggestions",
+                                }
+                            ],
+                        },
+                        {"type": "divider"},
+                    ]
+                )
+
+            blocks.append(
+                {
+                    "type": "actions",
+                    "block_id": "skill_suggestion_button",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "Send"},
+                            "style": "primary",
+                            "value": f"reply_to_suggestions_{message_id}",
+                            "action_id": "skill_suggestion_reply",
+                        }
+                    ],
+                }
             )
 
         return {"blocks": blocks}
+
+    def show_more_skills(
+        self,
+        user_id: str,
+        nb_already_suggested: int,
+        *,
+        increment_by: int = 2,
+        already_selected: Iterable[str] = (),
+        message_id: str = "",
+    ) -> BotReply:
+        """ Return skill recommendation message with more suggestions
+
+        :param user_id: User ID of the user for whom to suggest skills
+        :param nb_already_suggested: How many skills have already been suggested
+        :param increment_by: How many more skills to suggest
+        :param already_selected: Which skills have already been selected in the checkboxes
+        :param message_id: Optional message id to concatenate to option values (to prevent weird slack behaviour)
+        :return: Reply with (more) skill suggestions
+        """
+        rec = self._recommendations_for(
+            user_id=user_id, limit=nb_already_suggested + increment_by
+        )
+        return self._format_skill_recommendations(
+            rec, already_selected=already_selected, message_id=message_id
+        )
 
     def update_user_history(self, user_id: str, skills: List[str]):
         now = datetime.now()
