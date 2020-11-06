@@ -23,6 +23,9 @@ class BotDatabase:
         )
         self._create_tables()
 
+    def __del__(self):
+        self.connection.close()
+
     def _create_tables(self):
         with self._lock, self.connection as conn:
             botdb = conn.cursor()
