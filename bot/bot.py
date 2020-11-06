@@ -131,7 +131,7 @@ class Bot:
         return self.help()
 
     def skills_command(self, user_id: str, _message: str, _match) -> BotReply:
-        rec = self._recommendations_for(user_id=user_id, limit=None)
+        rec = self._recommendations_for(user_id=user_id)
         return {
             "blocks": [
                 {
@@ -188,7 +188,7 @@ class Bot:
         user_id: str = None,
         employee_id: int = None,
         history: Iterable[Tuple[Any, Any, str]] = None,
-        limit: Optional[int] = 2,
+        limit: Optional[int] = 4,
     ):
         """Return list of recommendations for user.
 
@@ -200,7 +200,7 @@ class Bot:
         :param user_id: Slack user id
         :param employee_id: Vincit employee id
         :param history: recommendations to exclude
-        :param limit: maximum number of recommendations to return, use None for no limit
+        :param limit: number of recommendations to return
 
         :return: list of recommendations
         """
@@ -213,9 +213,8 @@ class Bot:
             history = self.user_db.get_history_by_user_id(user_id)
         previous = {item for _id, _date, item in history}
         try:
-            nb_recs = limit if limit is not None else 4
             rec = self.recommender.recommend_skills_to_user(
-                employee_id, nb_recs, ignored_skills=list(previous)
+                employee_id, limit, ignored_skills=list(previous)
             )
         except KeyError:
             return []
@@ -374,7 +373,7 @@ class Bot:
         except KeyError:
             return {"text": "You are already signed-up!"}
 
-        rec = self._recommendations_for(employee_id=employee_id, limit=None)
+        rec = self._recommendations_for(employee_id=employee_id)
         blocks = [
             {
                 "type": "section",
