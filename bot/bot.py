@@ -317,32 +317,31 @@ class Bot:
 
         return {"blocks": blocks}
 
-    def find_person_by_skills(self, skills_array: List[str]):
+    def find_person_by_skills(self, skills: List[str]):
         """Look for people with a certain set of skills.
 
-        :param skills_array: A list containing names of requested skills.
+        :param skills: A list containing names of requested skills.
         :return: A List object containing found persons.
         """
         # Go through bot's database for people.
-        list_of_users = self.data_source.get_users()
-        list_of_matching_people = []
-        for person in list_of_users.values():
+        users = self.data_source.get_users()
+        matching_people = []
+        for person in users.values():
             # Go through all the people in the API
-            matching_person_holder = []  # Holds worker_id and matched skills.
-            for requested_skill in skills_array:
+            matching_person = []  # Holds worker_id and matched skills.
+            for requested_skill in skills:
                 # Look for matches in list of requested skills.
+                # TODO: use fuzzier matching, not equality (==)
                 if requested_skill in person["skills"]:
                     # A match is found.
-                    if len(matching_person_holder) == 0:
+                    if len(matching_person) == 0:
                         # Person with a matching skill gets detected for the first time.
-                        matching_person_holder.append(person["employeeId"])
-                    matching_person_holder.append(
-                        requested_skill
-                    )  # Record the matched skill.
-            if len(matching_person_holder) != 0:
+                        matching_person.append(person["employeeId"])
+                    matching_person.append(requested_skill)  # Record the matched skill.
+            if len(matching_person) != 0:
                 # At the end of the loop,
                 # if a person with a matching skill has been found,
                 # append him to the list which is to be returned.
-                list_of_matching_people.append(matching_person_holder)
+                matching_people.append(matching_person)
 
-        return list_of_matching_people
+        return matching_people
