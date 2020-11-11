@@ -31,15 +31,44 @@ def find_person_by_skills(self, skills: List[str], users: dict = None):
     return matching_people
 
 
-def sort_by_time(matching_people: List, yearWeek: str) -> List:
+def get_next_yearWeek(yearWeek: str) -> str:
+    week = int(yearWeek[-2:])
+    week += 1
+    if week > 52:
+        week = 0
+        week = yearWeek[:-2] + "00"
+    else:
+        week = yearWeek[:-2] + str(week)
+    return week
+
+
+def get_time_comparison(employeeId, allocations: List, yearWeek: str):
+    None
+
+
+def sort_by_time(matching_people: List, allocations: List, yearWeek: str) -> List:
     """
 
     :param matching_people:
-    :param yearWeek: form is year-Wweek. For example, 2020-W32
+    :param yearWeek: The expected time for candidate to be available. The form is year-Wweek. For example, 2020-W32
     :return: list sorted as most available people at the top.
     """
-    pass
     tmpList = []
+    for person in matching_people:
+        # Cycle through all the people who were matched.
+        for unit in allocations:
+            # In the JSON structure of allocations, the base level units are divided
+            # into two entities: "user" and "projects"
+            if person[0] is unit["user"]["id"]:
+                # When we find a
+                if yearWeek not in unit["project"]["allocations"]:
+                    # The person in question is not involved in a project on the requested week.
+                    tmpList.append(person)
+    # Add in the remaining people, who are preoccupied but who are otherwise qualified.
+    for person in matching_people:
+        if person not in tmpList:
+            tmpList.append(person)
+    return tmpList  # Return the sorted list.
 
     return matching_people
 
