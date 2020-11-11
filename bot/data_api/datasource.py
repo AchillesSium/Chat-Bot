@@ -108,12 +108,11 @@ class Datasource:
                 )
         return result
 
-    def get_users(self):
-        """ Get the list of
-
-        :return: list of users as JSON
-        """
+    def get_users(self) -> dict:
         return self.users
+
+    def get_allocations(self) -> dict:
+        return self.allocations
 
 
 if __name__ == "__main__":

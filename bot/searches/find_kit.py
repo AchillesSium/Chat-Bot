@@ -31,6 +31,19 @@ def find_person_by_skills(self, skills: List[str], users: dict = None):
     return matching_people
 
 
+def sort_by_time(matching_people: List, yearWeek: str) -> List:
+    """
+
+    :param matching_people:
+    :param yearWeek: form is year-Wweek. For example, 2020-W32
+    :return: list sorted as most available people at the top.
+    """
+    pass
+    tmpList = []
+
+    return matching_people
+
+
 if __name__ == "__main__":
     # For debugging
 
