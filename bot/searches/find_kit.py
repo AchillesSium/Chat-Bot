@@ -43,7 +43,18 @@ def get_next_yearWeek(yearWeek: str) -> str:
 
 
 def get_time_comparison(employeeId, allocations: List, yearWeek: str):
-    None
+    feedback = yearWeek
+    for unit in allocations:
+        # In the JSON structure of allocations, the base level units are divided
+        # into two entities: "user" and "projects"
+        if employeeId is unit["user"]["id"]:
+            # We find the worker. Let's no look at his projects.
+            for alloc in unit["projects"]:
+                while yearWeek in alloc["yearWeek"]:
+                    # Look ahead until you find the first vacant week.
+                    yearWeek = get_next_yearWeek(yearWeek)
+            feedback = yearWeek
+    return feedback
 
 
 def sort_by_time(matching_people: List, allocations: List, yearWeek: str) -> List:
@@ -54,23 +65,27 @@ def sort_by_time(matching_people: List, allocations: List, yearWeek: str) -> Lis
     :return: list sorted as most available people at the top.
     """
     tmpList = []
-    for person in matching_people:
-        # Cycle through all the people who were matched.
-        for unit in allocations:
-            # In the JSON structure of allocations, the base level units are divided
-            # into two entities: "user" and "projects"
-            if person[0] is unit["user"]["id"]:
-                # When we find a
-                if yearWeek not in unit["project"]["allocations"]:
-                    # The person in question is not involved in a project on the requested week.
-                    tmpList.append(person)
-    # Add in the remaining people, who are preoccupied but who are otherwise qualified.
-    for person in matching_people:
-        if person not in tmpList:
-            tmpList.append(person)
-    return tmpList  # Return the sorted list.
 
-    return matching_people
+    # for person in matching_people:
+    #     # Cycle through all the people who were matched.
+    #     for unit in allocations:
+    #         # In the JSON structure of allocations, the base level units are divided
+    #         # into two entities: "user" and "projects"
+    #         if person[0] is unit["user"]["id"]:
+    #             # When we find a
+    #             if yearWeek not in unit["project"]["allocations"]:
+    #                 # The person in question is not involved in a project on the requested week.
+    #                 tmpList.append(person)
+    # # Add in the remaining people, who are preoccupied but who are otherwise qualified.
+    # for person in matching_people:
+    #     if person not in tmpList:
+    #         tmpList.append(person)
+
+    tmpList = sorted(
+        matching_people,
+        key=get_time_comparison(matching_people[0], allocations, yearWeek),
+    )
+    return tmpList  # Return the sorted list.
 
 
 if __name__ == "__main__":

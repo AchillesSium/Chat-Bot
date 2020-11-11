@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from bot.data_api.datasource import Datasource
 from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
 from bot.chatBotDatabase import BotDatabase
-from bot.searches.find_kit import find_person_by_skills
+from bot.searches.find_kit import find_person_by_skills, sort_by_time
 
 BotReply = Dict[str, Any]
 
@@ -317,13 +317,21 @@ class Bot:
 
         return {"blocks": blocks}
 
-    def find_by_skills(self, skills: List[str]):
+    def find_by_skills(self, skills: List[str], yearWeek: str = None):
         """Look for people with a certain set of skills.
 
         :param skills: A list containing names of requested skills.
+        :param yearWeek:
         :return: A List object containing found persons.
         """
         # Go through bot's database for people.
+        if yearWeek == None:
+            yearWeek = datetime.date(datetime.now()).isocalendar()[:2]
+            yearWeek = str(yearWeek[0]) + "-W" + str(yearWeek[1])
         matching_people = find_person_by_skills(skills, self.data_source.get_users())
+
+        matching_people = sort_by_time(
+            matching_people, self.data_source.get_allocations(), yearWeek
+        )
 
         return matching_people
