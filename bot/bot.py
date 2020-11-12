@@ -68,6 +68,13 @@ class Bot:
 
         self._commands = [
             Command(
+                "help",
+                matcher("help(?:\s+(?P<topic>\w+))?"),
+                self.help,
+                requires_signup=False,
+                help_text="help for the bot or a specific command, usage: `help [command]`",
+            ),
+            Command(
                 "sign-up",
                 # Matches
                 #   optional mention or '/'  (this is not captured as a group)
@@ -92,9 +99,20 @@ class Bot:
                 self.sign_off,
                 help_text="leave the service",
             ),
+            Command(
+                "find",
+                matcher("find\s+(w\d{1,2}\s+)?(.*)"),
+                self.find_candidates,
+                requires_signup=False,
+                help_text="find candidates with certain skills",
+            ),
         ]
 
-    def help(self) -> BotReply:
+    def help(
+        self, _user_id: str = None, _message: str = None, match: re.Match = None
+    ) -> BotReply:
+        if match and (topic := match.group("topic")):
+            return {"text": f"help for topic: {topic}"}
         return {
             "blocks": [
                 {
@@ -103,10 +121,6 @@ class Bot:
                         "type": "mrkdwn",
                         "text": "*Hi!* I understand the following commands:",
                     },
-                },
-                {
-                    "type": "section",
-                    "text": {"type": "mrkdwn", "text": "- `help` (this message)"},
                 },
                 *(
                     {
@@ -135,6 +149,56 @@ class Bot:
                     break
                 return command.action(user_id, message, match)
         return self.help()
+
+    def find_candidates(self, _user_id: str, _message: str, match: re.Match):
+        "Find candidate employees who have particular skills"
+
+        year, current_week, _ = datetime.now().isocalendar()
+
+        starting_week, skills = match.groups()
+        if starting_week:
+            week = int(starting_week[1:])
+            if week < current_week:
+                year += 1
+        else:
+            week = current_week
+
+        skills = {s.strip().lower() for s in skills.split(",")}
+
+        # TODO: find the actual free people with the skills, starting from (year, week)
+        people = [
+            (123, ("js", "angular"), ((42, 0.8), (43, 0.8), (44, 0.2))),
+            (321, ("js",), ((43, 0.0), (44, 0.4))),
+        ]
+
+        if not people:
+            return {"text": "I could not find anyone available with those skills"}
+
+        blocks = [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "I found the following employees who are free next",
+                },
+            }
+        ]
+
+        for employee_id, skill, availability in people[:5]:
+            skill_str = ", ".join(skill)
+            avail = ", ".join(f"week {w}: {round(100*(1-p))}%" for w, p in availability)
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*{employee_id}*\n\twith skills: {skill_str}\n\tavailable: {avail}",
+                    },
+                }
+            )
+
+        # TODO: add button to fetch more people, if available
+        return {"blocks": blocks}
 
     def skills_command(self, user_id: str, _message: str, _match) -> BotReply:
         rec = self._recommendations_for(user_id=user_id)
