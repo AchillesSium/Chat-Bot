@@ -12,6 +12,8 @@ from typing import (
     Set,
     Tuple,
     Dict,
+    List,
+    Iterable,
 )
 
 import yaml
@@ -29,6 +31,10 @@ YAML = NewType("YAML", MutableMapping[str, Any])
 
 @dataclass
 class SkillRecommendation:
+    """
+    Helper class for skill recommendations
+    """
+
     recommendation_list: MutableSequence[str]
     similarities: MutableSequence[float]
     most_similar_to: MutableSequence[str]
@@ -53,23 +59,22 @@ def recursive_update_dict(dict1, dict2):
 
 
 def read_yaml(path: Path) -> YAML:
-    """ Read yaml into dict from path
+    """ Read yaml file
 
-    @param path: yaml file path
-    @return: yaml dict
+    :param path: Input path
+    :return: Dict containing the contents of the input file
     """
     with path.open("r") as f:
         return yaml.safe_load(f)
 
 
-def clean_one(sentence: str, settings: MutableMapping[str, Any]):
+def clean_one(sentence: str, settings: MutableMapping[str, Any]) -> str:
     """ Clean a sentence.
     Includes stripping whitespace, removing non-characters.
 
     :param sentence: Sentence to clean
-    :type sentence: str
+    :param settings: Settings
     :return: Cleaned sentence
-    :rtype: str
     """
     to_remove = [
         "\u2022",
@@ -103,7 +108,13 @@ def clean_one(sentence: str, settings: MutableMapping[str, Any]):
     return sentence
 
 
-def split_sentence(sentence: str):
+def split_sentence(sentence: str) -> List[str]:
+    """ Split a sentence to words
+    (Easier to change implementation)
+
+    :param sentence: Sentence to split
+    :return: List of words
+    """
     # return nltk.tokenize.word_tokenize(sentence)
     return sentence.split()
 
@@ -113,6 +124,7 @@ def clean_skills(data: SkillData, settings: MutableMapping[str, Any]) -> SkillDa
     Includes stripping whitespace, removing non-characters.
 
     :param data: Data to clean
+    :param settings: Settings to use when cleaning
     :return: Cleaned data
     """
     cleaned_data = {}
@@ -141,6 +153,42 @@ class SkillExtractor:
         """
         self.chunker = nltk.RegexpParser(chunker_patterns)
 
+        skill_feat_type = self.config["feature_type"]
+        feat_functions = {
+            "noun": self._extract_noun_phrases,
+            "skill": self._extract_skills,
+            "word": self._extract_words,
+        }
+        stemmer_name = self.config["stemming"]
+        stemmers = {
+            "porter": nltk.PorterStemmer(),
+            "snowball": nltk.SnowballStemmer("english"),
+            "lanc": nltk.LancasterStemmer(),
+        }
+        # Python dictionaries guarantee insertion ordering starting from 3.7
+        for key, feat_func in feat_functions.items():
+            if skill_feat_type.lower().startswith(key):
+                self.feat_func = feat_func
+                break
+        else:
+            available = ", ".join(feat_functions)
+            raise AttributeError(
+                f"Skill feature {skill_feat_type!r} not recognized! Available options are: {available}"
+            )
+
+        if stemmer_name:
+            for key, stemmer in stemmers.items():
+                if stemmer_name.lower().startswith(key):
+                    self.stemmer = stemmer
+                    break
+            else:
+                available = ", ".join(stemmers)
+                raise AttributeError(
+                    f"Stemmer {stemmer_name!r} not recognized! Available options are: {available}"
+                )
+        else:
+            self.stemmer = None
+
     @staticmethod
     def _stem_skills(skills: MutableSequence[str], stemmer: nltk.StemmerI):
         def is_non_stem_word(the_word: str):
@@ -167,74 +215,67 @@ class SkillExtractor:
 
         return result
 
+    def post_process_skill_features(
+        self, skill_features: MutableSequence[str]
+    ) -> Tuple[List[str], List[str]]:
+        """ Do post-processing on skill features (e.g. lowercase, stemming) according to settings
+
+        :param skill_features: Skill features to process
+        :return: Skill features before and after processing
+        """
+        skill_features = list(skill_features)
+        no_post_skill = skill_features
+
+        if self.config["use_lowercase"]:
+            skill_features = [s.lower() for s in skill_features]
+
+        if self.stemmer:
+            skill_features = self._stem_skills(skill_features, self.stemmer)
+
+        # Remove empty, if they exist
+        to_del = []
+        for i, s in enumerate(skill_features):
+            if s == "":
+                to_del.append(i)
+
+        for i in to_del:
+            del skill_features[i]
+            del no_post_skill[i]
+
+        return no_post_skill, skill_features
+
     def extract_skill_features(
         self, data: SkillData
     ) -> Tuple[SkillData, Dict[str, str]]:
         """ Create new SkillData dict with extracted features
 
-        @param data: Raw
-        @return:
+        @param data: Raw skill data
+        @return: Skill data with extracted skill features
         """
-        skill_feat_type = self.config["feature_type"]
-        feat_functions = {
-            "noun": self._extract_noun_phrases,
-            "skill": self._extract_skills,
-            "word": self._extract_words,
-        }
-        stemmer_name = self.config["stemming"]
-        stemmers = {
-            "porter": nltk.PorterStemmer(),
-            "snowball": nltk.SnowballStemmer("english"),
-            "lanc": nltk.LancasterStemmer(),
-        }
-        # Python dictionaries guarantee insertion ordering starting from 3.7
-        for key, feat_func in feat_functions.items():
-            if skill_feat_type.lower().startswith(key):
-                break
-        else:
-            available = ", ".join(feat_functions)
-            raise AttributeError(
-                f"Skill feature {skill_feat_type!r} not recognized! Available options are: {available}"
-            )
-
-        if stemmer_name:
-            for key, stemmer in stemmers.items():
-                if stemmer_name.lower().startswith(key):
-                    break
-            else:
-                available = ", ".join(stemmers)
-                raise AttributeError(
-                    f"Stemmer {stemmer_name!r} not recognized! Available options are: {available}"
-                )
-
         skill_features = {}
-        skill_key = {}
+        interim_skill_key = defaultdict(set)
+        no_post_skill_counter = Counter()
         for employee_id, skills in data.items():
             if skills is not None:
-                skill_feat = feat_func(skills)
-                no_post_skill = skill_feat
-
-                if self.config["use_lowercase"]:
-                    skill_feat = [s.lower() for s in skill_feat]
-
-                if stemmer_name:
-                    skill_feat = self._stem_skills(skill_feat, stemmer)
-
-                # Remove empty, if they exist
-                to_del = []
-                for i, s in enumerate(skill_feat):
-                    if s == "":
-                        to_del.append(i)
-
-                for i in to_del:
-                    del skill_feat[i]
-                    del no_post_skill[i]
+                skill_feat = self.feat_func(skills)
+                no_post_skill, skill_feat = self.post_process_skill_features(skill_feat)
+                no_post_skill_counter.update(no_post_skill)
 
                 skill_features[employee_id] = skill_feat
-                skill_key.update(zip(skill_feat, no_post_skill))
+                # Store which skill features correspond to which "human-readable" skills
+                # E.g. with stemming and lowercase: design -> Designing, Designed, Designer, Design
+                for skill, np_skill in zip(skill_feat, no_post_skill):
+                    interim_skill_key[skill].add(np_skill)
 
             else:
                 skill_features[employee_id] = None
+
+        # Out of all the corresponding "human-readable" skills,
+        # take the most common one and link it with the skill feature
+        skill_key = {
+            skill: max(np_skills, key=lambda s: no_post_skill_counter[s])
+            for skill, np_skills in interim_skill_key.items()
+        }
 
         return skill_features, skill_key
 
@@ -515,7 +556,12 @@ class SkillRecommenderCF:
         if reinitialize:
             self.initialize_recommender(reload_options=False)
 
-    def get_user_skills(self, user_id: int):
+    def get_user_skills(self, user_id: int) -> List[str]:
+        """ Get extracted skill features of user
+
+        :param user_id: User's user id
+        :return: List of skill features
+        """
         if user_id in self.skill_index.index:
             user_skills = [
                 skill for skill, sc in self.skill_index.loc[user_id].items() if sc > 0
@@ -528,6 +574,12 @@ class SkillRecommenderCF:
     def initialize_recommender(
         self, ds: Optional[Datasource] = None, reload_options: bool = True
     ):
+        """ (Re)initialize recommender
+        Reconstructs skill index, similarity matrix, and possibly the neighbourhoods
+
+        :param ds: Datasource object to use
+        :param reload_options: Whether or not to also reload options from yaml file
+        """
         if ds is not None:
             self.ds = ds
 
@@ -535,7 +587,7 @@ class SkillRecommenderCF:
         if reload_options:
             self._reload_options()
 
-        skill_extractor = SkillExtractor(self.config["skill_features"])
+        self.skill_extractor = SkillExtractor(self.config["skill_features"])
         similarity_evaluator = SimilarityClac(
             self.config["similarity_metric"], self.config["nb_workers"]
         )
@@ -544,7 +596,7 @@ class SkillRecommenderCF:
         raw_skills_by_user = clean_skills(self.ds.skills_by_user(), self.config)
 
         # print("Extracting skill features")
-        user_skills, skill_key = skill_extractor.extract_skill_features(
+        user_skills, skill_key = self.skill_extractor.extract_skill_features(
             raw_skills_by_user
         )
         self.skill_key = skill_key
@@ -561,20 +613,33 @@ class SkillRecommenderCF:
         # print("Init done!")
 
     def clear_recommendation_history(self):
+        """
+        Clear recommendation history
+        """
         self.recommendation_history.clear()
 
     def update_recommendation_history(self, user_id: int, skill: str):
+        """ Update recommendation history
+
+        :param user_id: User's user id
+        :param skill: Skill to add to user's history
+        """
         self.recommendation_history[user_id].add(skill)
 
     def recommend_skills_to_user(
-        self, user_id: int, nb_recommendations: int = 10, nb_most_similar: int = 5
+        self,
+        user_id: int,
+        nb_recommendations: int = 10,
+        nb_most_similar: int = 5,
+        ignored_skills: Iterable[str] = (),
     ) -> SkillRecommendation:
         """ Recommend skills to user based on CF
 
-        @param user_id: ID of employee for whom to recommend skills
-        @param nb_recommendations: How many recommendations to make
-        @param nb_most_similar: How many "most similar" skills of the user to list
-        @return: List of skills recommended to user, their similarities and what they are most similar to
+        :param user_id: ID of employee to whom to recommend skills
+        :param nb_recommendations: How many recommendations to make
+        :param nb_most_similar: How many "most similar" existing skills of the user to list
+        :param ignored_skills: What skills not to include in the recommendations (recommendation history)
+        :return: Recommendations in a SkillRecommendation object
         """
         user_skills = self.get_user_skills(user_id)
 
@@ -607,6 +672,14 @@ class SkillRecommenderCF:
         score = score.drop(user_skills)
         # Drop already-recommended skills
         score = score.drop(self.recommendation_history[user_id])
+        # Drop ignored skills
+        # If the recommender converts skill features back to "human-readable", this has to be reversed for the
+        # ignored skills.
+        if self.config["convert_back"]:
+            _, ignored_skills = self.skill_extractor.post_process_skill_features(
+                ignored_skills
+            )
+        score = score.drop(ignored_skills)
 
         # Get top recommendations
         recommendations = score.nlargest(nb_recommendations)

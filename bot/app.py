@@ -6,13 +6,17 @@ from slack.signature import SignatureVerifier
 from slackeventsapi import SlackEventAdapter
 
 import json
+import os
 
-from dotenv import dotenv_values, find_dotenv
+from dotenv import load_dotenv, find_dotenv
 
 from .bot import Bot
 
 # Get the tokens from .env file (.env.sample in version control)
-ENV = dotenv_values(find_dotenv())
+# Use load_dotenv to enable overwriting the values from system environment
+# variables, or from commandline
+load_dotenv(find_dotenv())
+ENV = os.environ
 SLACK_SIGNING_SECRET = ENV["SLACK_SIGNING_SECRET"]
 SLACK_API_TOKEN = ENV["SLACK_API_TOKEN"]
 
@@ -47,7 +51,10 @@ def send_message(user_id, message):
     return True
 
 
-bot = Bot(send_message=send_message)
+CRON = ENV["BOT_CHECK_SCHEDULE"]
+INTERVAL = int(ENV["BOT_DAYS_BETWEEN_MESSAGES"])
+
+bot = Bot(send_message=send_message, check_schedule=CRON, message_interval=INTERVAL)
 
 
 @app.route("/slack/events/interact", methods=["POST"])
@@ -60,17 +67,34 @@ def interaction():
     user_id = json_form["user"]["id"]
     action_dict = json_form["actions"][0]
 
-    if action_dict["action_id"] == "skill_suggestion_reply":
-        # This is fired when the user pushes the "Send" button
+    def get_selected_skills():
+        sep = "___"
+        result = set()
         try:
             selected_options = json_form["state"]["values"]["skill_suggestions"][
                 "checked_suggestions"
             ]["selected_options"]
-            selected_skills = [
-                selected_option["value"] for selected_option in selected_options
-            ]
+            result.update(
+                selected_option["value"].split(sep)[0]
+                for selected_option in selected_options
+            )
         except KeyError:
-            selected_skills = []
+            result = []
+
+        for block in json_form["message"]["blocks"]:
+            if block["block_id"] == "skill_suggestions":
+                acc = block["accessory"]
+                init_opts = acc.get("initial_options")
+
+                if init_opts is not None:
+                    for i in init_opts:
+                        result.add(i["value"].split(sep)[0])
+
+        return list(result)
+
+    if action_dict["action_id"] == "skill_suggestion_reply":
+        # This is fired when the user pushes the "Send" button
+        selected_skills = get_selected_skills()
 
         slack_client.chat_postMessage(
             channel=user_id, **bot.update_user_history(user_id, selected_skills)
@@ -80,8 +104,25 @@ def interaction():
 
     elif action_dict["action_id"] == "checked_suggestions":
         # This is fired when the user is checking the checkboxes
-        # TODO: I think it's possible to update messages. So maybe disable boxes when they're checked?
         return make_response("", 200)
+
+    elif action_dict["action_id"] == "show_more_suggestions":
+        og_timestamp = json_form["container"]["message_ts"]
+        channel = json_form["channel"]["id"]
+        nb_already_suggested, message_id = action_dict["value"].split("___")
+        nb_already_suggested = int(nb_already_suggested)
+
+        selected_skills = get_selected_skills()
+        formatted_suggestions = bot.show_more_skills(
+            user_id,
+            nb_already_suggested,
+            already_selected=selected_skills,
+            message_id=message_id,
+        )
+
+        slack_client.chat_update(
+            channel=channel, ts=og_timestamp, **formatted_suggestions
+        )
 
     return make_response("", 404)
 
