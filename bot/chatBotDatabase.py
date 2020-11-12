@@ -65,7 +65,7 @@ class BotDatabase:
             botdb = conn.cursor()
             try:
                 botdb.execute(
-                    "INSERT INTO history (user_id, dateStamp, recommended_skill) VALUES(?,?,?)",
+                    "INSERT INTO history (user_id, dateStamp, recommended_skill) VALUES(%s,%s,%s)",
                     (user_id, dateStamp, recommended_skill),
                 )
             except psy.errors.ForeignKeyViolation:
