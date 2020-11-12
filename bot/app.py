@@ -55,13 +55,13 @@ def send_message(user_id, message):
 CRON = ENV["BOT_CHECK_SCHEDULE"]
 INTERVAL = int(ENV["BOT_DAYS_BETWEEN_MESSAGES"])
 
-DB_FILE = ENV["DB_FILE"]
+PS_CONN_STRING = ENV["POSTGRES_CONN_STRING"]
 
 bot = Bot(
     send_message=send_message,
     check_schedule=CRON,
     message_interval=INTERVAL,
-    user_db=BotDatabase(DB_FILE),
+    user_db=BotDatabase(PS_CONN_STRING),
 )
 
 
