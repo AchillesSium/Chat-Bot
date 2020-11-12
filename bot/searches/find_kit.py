@@ -1,4 +1,7 @@
-def find_person_by_skills(self, skills: List[str], users: dict = None):
+from typing import List, Dict
+
+
+def find_person_by_skills(self, skills: List[str], users: Dict = None):
     """Look for people with a certain set of skills.
 
     :param skills: A list containing names of requested skills.
