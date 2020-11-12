@@ -102,6 +102,7 @@ class Bot:
                 "find",
                 matcher("find\s+(w\d{1,2}\s+)?(.*)"),
                 self.find_candidates,
+                requires_signup=False,
                 help_text="find candidates with certain skills",
             ),
         ]
@@ -151,11 +152,23 @@ class Bot:
     def find_candidates(self, _user_id: str, _message: str, match: re.Match):
         "Find candidate employees who have particular skills"
 
+        year, current_week, _ = datetime.now().isocalendar()
+
         starting_week, skills = match.groups()
+        if starting_week:
+            week = int(starting_week[1:])
+            if week < current_week:
+                year += 1
+        else:
+            week = current_week
+
         skills = {s.strip().lower() for s in skills.split(",")}
 
-        # TODO: find the actual free people with the skills
-        people = [(123, "js", "angular")]
+        # TODO: find the actual free people with the skills, starting from (year, week)
+        people = [
+            (123, ("js", "angular"), ((42, 0.8), (43, 0.8), (44, 0.2))),
+            (321, ("js",), ((43, 0.0), (44, 0.4))),
+        ]
 
         if not people:
             return {"text": "I could not find anyone available with those skills"}
@@ -170,13 +183,15 @@ class Bot:
             }
         ]
 
-        for employee_id, *skill in people[:5]:
+        for employee_id, skill, availability in people[:5]:
+            skill_str = ", ".join(skill)
+            avail = ", ".join(f"week {w}: {round(100*(1-p))}%" for w, p in availability)
             blocks.append(
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*{employee_id}* with skills: {', '.join(skill)}",
+                        "text": f"*{employee_id}*\n\twith skills: {skill_str}\n\tavailable: {avail}",
                     },
                 }
             )
