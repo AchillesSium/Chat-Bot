@@ -1,28 +1,13 @@
-from collections import namedtuple
 from pathlib import Path
 
 import json
+
+from bot.helpers import YearWeek
 
 # the parent of the git repository's root
 DATA_DIR = Path(__file__).resolve(strict=True).parent.parent.parent.parent
 PEOPLE_FILE = DATA_DIR / "people-simple.json"
 ALLOCATION_FILE = DATA_DIR / "allocation.json"
-
-
-YearWeek = namedtuple("YearWeek", ("year", "week"))
-
-
-def parse_year_week(string):
-    """ Parse year-week pair into a named YearWeek tuple.
-    Yearweek string is expected to be in yyyy-Www
-
-    @param string: Year-week pair as string
-    @return: Year-week pair as YearWeek
-    """
-    year, sep, week = string.partition("-W")
-    if not sep:
-        raise ValueError("invalid format")
-    return YearWeek(int(year), int(week))
 
 
 def parse_users(path: Path):
@@ -90,14 +75,14 @@ class Datasource:
         return {user: info["skills"] for user, info in self.users.items()}
 
     def allocations_within(self, start, end):
-        start = parse_year_week(start)
-        end = parse_year_week(end)
+        start = YearWeek.from_string(start)
+        end = YearWeek.from_string(end)
 
         if start > end:
             return []
 
         def in_range(allocation):
-            return start <= parse_year_week(allocation["yearWeek"]) <= end
+            return start <= YearWeek.from_string(allocation["yearWeek"]) <= end
 
         result = []
         for user, allocations in self.allocations.items():
