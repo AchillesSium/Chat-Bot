@@ -172,6 +172,31 @@ class Bot:
 
         if not people:
             return {"text": "I could not find anyone available with those skills"}
+        else:
+            return self._format_candidate_suggestions(people[:5], (skills, year, week))
+
+    def _format_candidate_suggestions(
+        self,
+        candidate_list: List,
+        original_query: Tuple[Iterable[str], int, int],
+        *,
+        max_suggestions: Optional[int] = None,
+    ) -> BotReply:
+        """ Format candidate suggestions into slack message blocks.
+
+        :param candidate_list: List of candidate suggestions
+        :param original_query: Query for which the candidates were found. Contains: (list of skills, year, week)
+        :param max_suggestions: Maximum number of candidates to suggest
+        :return: Slack message blocks for the candidate suggestions
+        """
+        if max_suggestions is not None:
+            candidate_list = candidate_list[:max_suggestions]
+        else:
+            max_suggestions = len(candidate_list) + 1
+
+        query_skills = original_query[0]
+        query_year = original_query[1]
+        query_week = original_query[2]
 
         blocks = [
             {
@@ -183,7 +208,7 @@ class Bot:
             }
         ]
 
-        for employee_id, skill, availability in people[:5]:
+        for employee_id, skill, availability in candidate_list:
             skill_str = ", ".join(skill)
             avail = ", ".join(f"week {w}: {round(100*(1-p))}%" for w, p in availability)
             blocks.append(
@@ -196,8 +221,46 @@ class Bot:
                 }
             )
 
-        # TODO: add button to fetch more people, if available
+        if len(candidate_list) < max_suggestions:
+            query_skills = set(
+                i.replace(",", "").replace("_", "") for i in query_skills
+            )
+            blocks.append(
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "Show more"},
+                            "value": f"{len(candidate_list)}_{','.join(query_skills)}_{query_year}_{query_week}",  # Easily get the number of already suggested candidates and the original query
+                            "action_id": "show_more_candidates",
+                        }
+                    ],
+                }
+            )
+
         return {"blocks": blocks}
+
+    def show_more_candidates(
+        self,
+        query: Tuple[List[str], int, int],
+        nb_already_suggested: int,
+        *,
+        increment_by: int = 2,
+    ) -> BotReply:
+        """ Get candidate recommendation message with more suggestions.
+
+        :param query: Query for which to get more suggestions. Contains: (list of skills, year, week)
+        :param nb_already_suggested: How many have already been suggested
+        :param increment_by: How many more to suggest
+        :return: Recommendation message
+        """
+        # TODO: find the actual free people with the skills, starting from (year, week)
+        people = [(321, ("js",), ((43, 0.0), (44, 0.4)))] * (
+            nb_already_suggested + increment_by
+        )
+
+        return self._format_candidate_suggestions(people, query)
 
     def skills_command(self, user_id: str, _message: str, _match) -> BotReply:
         rec = self._recommendations_for(user_id=user_id)
