@@ -1,0 +1,9 @@
+version: "3"
+
+services:
+  bot:
+    build:
+      dockerfile: Dockerfile
+      context: .
+    ports:
+      - "3000:3000"
