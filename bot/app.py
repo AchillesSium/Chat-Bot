@@ -11,7 +11,7 @@ import os
 from dotenv import load_dotenv, find_dotenv
 
 from .bot import Bot
-from .chatBotDatabase import BotDatabase
+from .chatBotDatabase import get_database_object
 
 # Get the tokens from .env file (.env.sample in version control)
 # Use load_dotenv to enable overwriting the values from system environment
@@ -55,13 +55,17 @@ def send_message(user_id, message):
 CRON = ENV["BOT_CHECK_SCHEDULE"]
 INTERVAL = int(ENV["BOT_DAYS_BETWEEN_MESSAGES"])
 
-PS_CONN_STRING = ENV["POSTGRES_CONN_STRING"]
+DB_TYPE = ENV["DB_TYPE"]
+DB_PARAMETERS = {
+    "postgres_connection_string": ENV["POSTGRES_CONN_STRING"],
+    "sqlite_db_file": ENV["SQLITE_DB_FILE"],
+}
 
 bot = Bot(
     send_message=send_message,
     check_schedule=CRON,
     message_interval=INTERVAL,
-    user_db=BotDatabase(PS_CONN_STRING),
+    user_db=get_database_object(DB_TYPE, DB_PARAMETERS),
 )
 
 
