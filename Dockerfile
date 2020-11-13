@@ -7,8 +7,22 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
+# download the required nltk data
+RUN python -c '\
+import nltk;\
+nltk.download("punkt");\
+nltk.download("averaged_perceptron_tagger");\
+nltk.download("stopwords")'
+
+# this is a temporary solution
+# copy the sample data
+COPY people-simple.json allocation.json /
+
 # Copy our source code
-COPY /bot .
+COPY bot ./bot
+
+# copy environment variables
+COPY .env ./
 
 # Run the application
-CMD ["python", "app.py"]
+CMD ["python", "-m", "bot.app"]
