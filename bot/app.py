@@ -10,7 +10,7 @@ import os
 
 from dotenv import load_dotenv, find_dotenv
 
-from .bot import Bot
+from bot.bot import Bot
 
 # Get the tokens from .env file (.env.sample in version control)
 # Use load_dotenv to enable overwriting the values from system environment
