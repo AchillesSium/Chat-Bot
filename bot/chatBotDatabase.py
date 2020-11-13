@@ -148,10 +148,6 @@ class SQLiteBotDatabase(IBotDatabase):
 class PostgresBotDatabase(IBotDatabase):
     def __init__(self, connection_string: str):
         self._lock = threading.RLock()
-        # FLAGS = sqlite3.PARSE_COLNAMES | sqlite3.PARSE_DECLTYPES
-        # self.connection = sqlite3.connect(
-        #     db_file_name, check_same_thread=False, detect_types=FLAGS
-        # )
 
         self.connection = psy.connect(connection_string)
         self._create_tables()
