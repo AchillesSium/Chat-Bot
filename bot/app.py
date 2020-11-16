@@ -124,6 +124,25 @@ def interaction():
             channel=channel, ts=og_timestamp, **formatted_suggestions
         )
 
+    elif action_dict["action_id"] == "show_more_candidates":
+        og_timestamp = json_form["container"]["message_ts"]
+        channel = json_form["channel"]["id"]
+        nb_already_suggested, query_skills, query_year, query_week = action_dict[
+            "value"
+        ].split("_")
+        nb_already_suggested = int(nb_already_suggested)
+        query_skills = query_skills.split(",")
+        query_year = int(query_year)
+        query_week = int(query_week)
+
+        formatted_suggestions = bot.show_more_candidates(
+            (query_skills, query_year, query_week), nb_already_suggested
+        )
+
+        slack_client.chat_update(
+            channel=channel, ts=og_timestamp, **formatted_suggestions
+        )
+
     return make_response("", 404)
 
 
