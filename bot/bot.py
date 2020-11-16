@@ -169,26 +169,24 @@ class Bot:
         skills = {s.strip() for s in skills.split(",")}
 
         # TODO: find the actual free people with the skills, starting from (year, week)
-        people = [
-            (123, ("js", "angular"), ((42, 0.8), (43, 0.8), (44, 0.2))),
-            (321, ("js",), ((43, 0.0), (44, 0.4))),
-        ]
+        # people = [
+        #     (123, ("js", "angular"), ((42, 0.8), (43, 0.8), (44, 0.2))),
+        #     (321, ("js",), ((43, 0.0), (44, 0.4))),
+        # ]
 
         ######
         if yearWeek == None:
-            yearWeek = datetime.date(datetime.now()).isocalendar()[:2]
-            yearWeek = str(yearWeek[0]) + "-W"
-            if int(yearWeek[1]) < 10:
+            tmpYearWeek = datetime.date(datetime.now()).isocalendar()[:2]
+            yearWeek = str(tmpYearWeek[0]) + "-W"
+            if int(tmpYearWeek[1]) < 10:
                 yearWeek += "0"
-            yearWeek += str(yearWeek[1])
+            yearWeek += str(tmpYearWeek[1])
         people = find_person_by_skills(
             skills,
             self.data_source.get_users(),
             self.data_source.get_allocations(),
             yearWeek,
         )
-
-        # matching_people = sort_by_time(matching_people, self.data_source.get_allocations(), yearWeek)
         ######
 
         if not people:

@@ -10,6 +10,10 @@ def debug_printer(item="Nothing was given to log.", sign="#"):
     print(sign * 6)
 
 
+def yearWeek_string_to_tuple(yearWeek: str) -> Tuple:
+    return (int(yearWeek[:4]), int(yearWeek[-2:]))
+
+
 def find_person_by_skills(
     skills: List[str], users: Dict, allocations: Dict, yearWeek: str
 ):
@@ -29,13 +33,13 @@ def find_person_by_skills(
             # Look for matches in list of requested skills.
             if person["skills"] is not None:
                 # Check to see if person has skills at all.
-                debug_printer(requested_skill, "¤")
+                # debug_printer(requested_skill, "¤")
                 # debug_printer("This person has skills.")
                 if requested_skill in person["skills"]:
                     # A match is found.
                     # if len(matching_person) == 0:
                     # Person with a matching skill gets detected for the first time.
-                    debug_printer("Requested skill found: " + requested_skill)
+                    # debug_printer("Requested skill found: " + requested_skill)
                     matching_person = person["employeeId"]
                     # matching_person.append(requested_skill)
                     skillsTuple += (requested_skill,)  # Record the matched skill.
@@ -43,8 +47,10 @@ def find_person_by_skills(
             # At the end of the loop,
             # if a person with a matching skill has been found,
             # append him to the list which is to be returned.
-            matching_people.append((matching_person, skillsTuple))
-        # Check out the allocations for all found people.
+            matching_people.append((matching_person, skillsTuple,))
+    # Check out the allocations for all found people.
+    # debug_printer(len(matching_people), "@")
+    if len(matching_people) != 0:
         matching_people = sort_by_time(matching_people, allocations, yearWeek)
 
     return matching_people
@@ -62,14 +68,29 @@ def get_next_yearWeek(yearWeek: str) -> str:
 
 
 def add_person_in_order(people: List, newPerson: Tuple) -> List:
-    for i in range(people):
-        if people[i][2][0][0] > newPerson[2][0][0]:
-            people.insert(i, newPerson)
-            break
+    if people:
+        for i in range(len(people)):
+            # debug_printer(people[i], "¤")
+            # debug_printer(newPerson, "%")
+            try:
+                if not people[i][2]:
+                    # Find a person who had an allocation but it was full.
+                    del people[i]
+                    continue
+                if people[i][2][0] > newPerson[2][0]:
+                    if people[i][2][1] > newPerson[2][1]:
+                        people.insert(i, newPerson)
+                    else:
+                        continue
+                    break
+            except IndexError:
+                pass
+    else:
+        people.append(newPerson)
     return people
 
 
-def sort_by_time(matching_people: List, allocations: List, yearWeek: str) -> List:
+def sort_by_time(matching_people: List, allocationsFile: List, yearWeek: str) -> List:
     """
 
     :param matching_people:
@@ -78,29 +99,37 @@ def sort_by_time(matching_people: List, allocations: List, yearWeek: str) -> Lis
     """
     tmpList = []
     allocList = []
+    # debug_printer(matching_people, "MM")
     for person in matching_people:
         # Cycle through all the people who were matched.
         allocList = []
-        for unit in allocations:
-            # In the JSON structure of allocations, the base level units are divided
-            # into two entities: "user" and "projects"
-            if person[0] is unit["user"]["employeeId"]:
-                # Find a person's block in the system
-                for alloc in unit["projects"]["allocations"]:
-                    if alloc["yearWeek"] >= yearWeek:
-                        # Detect weeks equal or later than param yearWeek
-                        if alloc["percentage"] < 100:
-                            # Allocation is not completely taken.
-                            tmpAlloc = (
-                                int(alloc["yearWeek"][-2:]),
-                                float(alloc["percentage"]) / 100,
-                            )
-                            allocList.insert(bisect_left(allocList, tmpAlloc), tmpAlloc)
+        if person[0] in allocationsFile:
+            # debug_printer(allocationsFile[person[0]], "ALLO")
+            for allocation in allocationsFile[person[0]]:
+                # In the JSON structure of allocations, the base level units are divided
+                # into two entities: "user" and "projects"
+                # debug_printer(person, "%")
+                # debug_printer(allocation, "&")
+                if allocation["yearWeek"] >= yearWeek:
+                    # Detect weeks equal or later than param yearWeek
+                    if allocation["percentage"] < 100:
+                        # Allocation is not completely taken.
+                        tmpAlloc = (
+                            int(allocation["yearWeek"][-2:]),
+                            float(allocation["percentage"]) / 100,
+                        )
+                        allocList.insert(bisect_left(allocList, tmpAlloc), tmpAlloc)
+        else:
+            # Subject had no allocations.
+            # debug_printer(str([person[0]]) + " was not found", "*")
+            allocList.append((int(yearWeek[-2:]), 0.0,))
+            # debug_printer(person + tuple(allocList))
         # All allocations extracted for person
         person = person + tuple(allocList)
         # Add in the remaining people, who are preoccupied but who are otherwise qualified.
+        debug_printer(tmpList, "TIME")
         tmpList = add_person_in_order(tmpList, person)
-    # tmpList = sorted(matching_people, key=get_time_comparison(matching_people, allocations, yearWeek))
+    debug_printer(tmpList, "NED")
     return tmpList  # Return the sorted list.
 
 
