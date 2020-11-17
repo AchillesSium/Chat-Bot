@@ -88,23 +88,48 @@ def add_to_week_allocation(allocList: List, tmpAlloc) -> List:
 
 def add_person_in_order(people: List, newPerson: Tuple) -> List:
     if not people:
+        # List is empty. Add the first item.
         people.append(newPerson)
     else:
+        # Loop through the list and add the new person to the appropriate position.
+        wasAdded = False
         for i in range(len(people)):
-            if people[i][2][0] >= newPerson[2][0]:
+            # (731, ('C',), (('2020-W47', 0.0),))   # Format of a person on the list.
+
+            # debug_printer(people[i], "II")
+            # debug_printer(str(people[i][2][0][0]), "II")
+            # debug_printer(people[i][2][0], "II")
+            # debug_printer(newPerson[2][0], "@@@")
+
+            if people[i][2][0][0] >= newPerson[2][0][0]:
                 # If the new person is on the same week, or on an earlier week
+
                 # debug_printer(people[i][2][1], "II")
                 # debug_printer(newPerson[2][1], "@@@")
-                if people[i][2][1] < newPerson[2][1]:
-                    # Existing entry is more occupied than the new person.
+
+                # if newPerson[0] == 176:
+                # debug_printer(newPerson, "SS1")
+                # debug_printer(people[i], "SS2")
+
+                if people[i][2][0][1] >= newPerson[2][0][1]:
+                    # Existing entry is more preoccupied than the new person.
                     # debug_printer("Continue", "CON")
-                    continue
+                    people.insert(i, newPerson)
+                    wasAdded = True
+                    break  # After insertion, there is no need to loop through the list.
                 else:
                     # debug_printer("Insert at " + str(i), "IN ")
                     # debug_printer(people[i], "¤")
                     # debug_printer(newPerson, "%")
-                    people.insert(i, newPerson)
-                    break  # After insertion, there is no need to loop through the list.
+                    continue
+            else:
+                # debug_printer("Insert at " + str(i), "IN ")
+                # debug_printer(people[i], "¤")
+                # debug_printer(newPerson, "%")
+                people.insert(i, newPerson)
+                break  # After insertion, there is no need to loop through the list.
+        if not wasAdded:
+            people.append(newPerson)
     return people
 
 
@@ -137,25 +162,27 @@ def sort_by_time(matching_people: List, allocationsFile: List, yearWeek: str) ->
                         # Allocation is not completely taken.
                         # debug_printer("Got to 'percentage < 100'")
                         tmpAlloc = (
-                            int(allocation["yearWeek"][-2:]),
+                            allocation["yearWeek"],
                             float(allocation["percentage"]) / 100,
                         )
                         # debug_printer(tmpAlloc, "tmpA")
                         allocList = add_to_week_allocation(allocList, tmpAlloc)
-                        debug_printer(allocList, str(person[0]) + " ")
-            # debug_printer(allocList, "PersonAlloDone")
+                        # debug_printer(allocList, str(person[0]) + " ")
+                        if len(allocList) == 10:
+                            break  # Ten entries is enough.
+            # debug_printer("allocList done", "PersonAlloDone")
         else:
             # Subject had no allocations.
             # debug_printer(str([person[0]]) + " was not found", "*")
             # allocList.append((int(yearWeek[-2:]), 0.0,))
-            insort_left(allocList, (int(yearWeek[-2:]), 0.0,))
+            insort_left(allocList, (yearWeek, 0.0,))
             # debug_printer(allocList, str(person[0]) + " _ ")
             # debug_printer(person + tuple(allocList))
         # All allocations extracted for person
         if allocList:
             # Only persons for whom allocations were available.
             # debug_printer(allocList, str(person) + " # ")
-            person = person + tuple(allocList)
+            person = person + (tuple(allocList),)
             # debug_printer(allocList, str(person) + " $ ")
             # debug_printer(person, "per")
             # Add in the remaining people, who are preoccupied but who are otherwise qualified.
@@ -163,13 +190,14 @@ def sort_by_time(matching_people: List, allocationsFile: List, yearWeek: str) ->
             tmpList = add_person_in_order(tmpList, person)
         # debug_printer("Person-loop end", "00")
     # debug_printer(tmpList, "NED")
-    print("NED" * 6)
-    print("NED" * 6)
-    for line in tmpList:
-        print(line)
-    print("NED" * 6)
-    print("NED" * 6)
-    print()
+    # print("NED" * 6)
+    # print("NED" * 6)
+    # for line in tmpList:
+    #     print(line)   # Debug print
+    # print("NED" * 6)
+    # print("NED" * 6)
+    # print()
+
     return tmpList  # Return the sorted list.
 
 
