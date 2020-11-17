@@ -181,6 +181,7 @@ class Bot:
             if int(tmpYearWeek[1]) < 10:
                 yearWeek += "0"
             yearWeek += str(tmpYearWeek[1])
+
         people = find_person_by_skills(
             skills,
             self.data_source.get_users(),
