@@ -8,4 +8,5 @@ services:
       dockerfile: Dockerfile
       context: .
     ports:
-      - "3000:3000"
+      - "3000:${PORT}"
+    command: ["uwsgi", "--http", ":${PORT}", "--enable-threads", "--module", "bot.app:app"]

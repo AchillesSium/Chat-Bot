@@ -24,6 +24,3 @@ COPY bot ./bot
 
 # copy environment variables
 COPY .env ./
-
-# Run the application
-CMD ["uwsgi", "--http", ":${PORT}", "--enable-threads", "--module", "bot.app:app"]
