@@ -2,6 +2,8 @@ version: "3"
 
 services:
   bot:
+    environment:
+      - PORT=3000
     build:
       dockerfile: Dockerfile
       context: .

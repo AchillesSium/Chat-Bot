@@ -5,7 +5,8 @@ FROM python:3.8.6-buster
 WORKDIR /app
 # Install dependencies
 COPY requirements.txt .
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir uwsgi
 
 # download the required nltk data
 RUN python -c '\
@@ -25,4 +26,4 @@ COPY bot ./bot
 COPY .env ./
 
 # Run the application
-CMD ["python", "-m", "bot.app"]
+CMD ["uwsgi", "--http", ":${PORT}", "--enable-threads", "--module", "bot.app:app"]
