@@ -12,6 +12,9 @@ from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecomme
 from bot.chatBotDatabase import BotDatabase, User, HistoryEntry
 from bot.searches.find_kit import find_person_by_skills, sort_by_time
 
+from bot.helpers import YearWeek
+
+
 BotReply = Dict[str, Any]
 
 
@@ -150,45 +153,30 @@ class Bot:
                 return command.action(user_id, message, match)
         return self.help()
 
-    def find_candidates(
-        self, _user_id: str, _message: str, match: re.Match, yearWeek: str = None
-    ):
+    def find_candidates(self, _user_id: str, _message: str, match: re.Match):
         "Find candidate employees who have particular skills"
+        start_week = YearWeek.now()
 
-        year, current_week, _ = datetime.now().isocalendar()
+        requested_week, skills = match.groups()
+        if requested_week:
+            y, w = start_week
+            week = int(requested_week[1:])
+            if week < w:
+                y += 1
+            start_week = YearWeek(y, week)
+            if not start_week.valid():
+                return {
+                    "text": f"The requested week ({requested_week.strip()}) is not valid"
+                }
 
-        starting_week, skills = match.groups()
-        if starting_week:
-            week = int(starting_week[1:])
-            if week < current_week:
-                year += 1
-        else:
-            week = current_week
-
-        # skills = {s.strip().lower() for s in skills.split(",")} # Juho's original
         skills = {s.strip() for s in skills.split(",")}
-
-        # TODO: find the actual free people with the skills, starting from (year, week)
-        # people = [
-        #     (123, ("js", "angular"), ((42, 0.8), (43, 0.8), (44, 0.2))),
-        #     (321, ("js",), ((43, 0.0), (44, 0.4))),
-        # ]
-
-        ######
-        if yearWeek == None:
-            tmpYearWeek = datetime.date(datetime.now()).isocalendar()[:2]
-            yearWeek = str(tmpYearWeek[0]) + "-W"
-            if int(tmpYearWeek[1]) < 10:
-                yearWeek += "0"
-            yearWeek += str(tmpYearWeek[1])
 
         people = find_person_by_skills(
             skills,
             self.data_source.get_users(),
             self.data_source.get_allocations(),
-            yearWeek,
+            str(start_week),
         )
-        ######
 
         if not people:
             return {"text": "I could not find anyone available with those skills"}
@@ -205,13 +193,14 @@ class Bot:
 
         for employee_id, skill, availability in people[:5]:
             skill_str = ", ".join(skill)
-            avail = ", ".join(f"week {w}: {round(100*(1-p))}%" for w, p in availability)
+            w, p = availability[0]
+            avail = f"{w}, {round(100*(1-p))}%"
             blocks.append(
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*{employee_id}*\n\twith skills: {skill_str}\n\tavailable: {avail}",
+                        "text": f"*{employee_id}*\n\twith skills: {skill_str}\n\tavailable next: {avail}",
                     },
                 }
             )
@@ -469,22 +458,3 @@ class Bot:
         ]
 
         return {"blocks": blocks}
-
-    def find_by_skills(self, skills: List[str], yearWeek: str = None):
-        """Look for people with a certain set of skills.
-
-        :param skills: A list containing names of requested skills.
-        :param yearWeek:
-        :return: A List object containing found persons.
-        """
-        # Go through bot's database for people.
-        if yearWeek == None:
-            yearWeek = datetime.date(datetime.now()).isocalendar()[:2]
-            yearWeek = str(yearWeek[0]) + "-W" + str(yearWeek[1])
-        matching_people = find_person_by_skills(skills, self.data_source.get_users())
-
-        matching_people = sort_by_time(
-            matching_people, self.data_source.get_allocations(), yearWeek
-        )
-
-        return matching_people
