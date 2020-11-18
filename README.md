@@ -98,3 +98,16 @@ iterating on the app, otherwise the url changes.
 
 Ps. The inconvenience with the random ngrok urls can be avoided with paid plan
 and `--subdomain` switch to ngrok.
+
+### Setting up Docker
+
+Download Docker desktop from the following link:
+https://www.docker.com/products/docker-desktop 
+Make sure docker desktop is running when you want to run docker on you machine.
+Now go through the following commands:
+- On the terminal, build the docker image with the command as follow:
+$ docker-compose build
+- On the terminal, run the docker with the command as follow:
+$ docker-compose up
+- To turn down docker run the command as follow: 
+$ docker-compose down 
