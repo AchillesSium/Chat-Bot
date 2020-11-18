@@ -149,8 +149,6 @@ class SQLiteBotDatabase(IBotDatabase):
 
 class PostgresBotDatabase(IBotDatabase):
     def __init__(self, connection_string: str):
-        self._lock = threading.RLock()
-
         self.connection = psy.connect(connection_string)
         self._create_tables()
 
@@ -158,20 +156,20 @@ class PostgresBotDatabase(IBotDatabase):
         self.close()
 
     def _create_tables(self):
-        with self._lock, self.connection as conn:
+        with self.connection as conn:
             botdb = conn.cursor()
             botdb.execute(
                 "CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY UNIQUE, employeeId INT UNIQUE NOT NULL, remind_next timestamp)"
             )
 
-        with self._lock, self.connection as conn:
+        with self.connection as conn:
             botdb = conn.cursor()
             botdb.execute(
                 "CREATE TABLE IF NOT EXISTS history(user_id TEXT, dateStamp timestamp, recommended_skill TEXT, FOREIGN KEY(user_id) REFERENCES users(id))"
             )
 
     def add_user(self, user: User):
-        with self._lock, self.connection as conn:
+        with self.connection as conn:
             botdb = conn.cursor()
             try:
                 botdb.execute("INSERT INTO users VALUES(%s,%s,%s)", user)
@@ -179,7 +177,7 @@ class PostgresBotDatabase(IBotDatabase):
                 raise KeyError("User already exists")
 
     def set_next_reminder(self, user_id: str, at: datetime.datetime):
-        with self._lock, self.connection as conn:
+        with self.connection as conn:
             botdb = conn.cursor()
             botdb.execute(
                 "UPDATE users SET remind_next = %s WHERE id = %s", (at, user_id)
@@ -188,7 +186,7 @@ class PostgresBotDatabase(IBotDatabase):
                 raise KeyError("User does not exist")
 
     def add_history(self, user_id, dateStamp, recommended_skill):
-        with self._lock, self.connection as conn:
+        with self.connection as conn:
             botdb = conn.cursor()
             try:
                 botdb.execute(
@@ -233,12 +231,12 @@ class PostgresBotDatabase(IBotDatabase):
     def delete_user(self, user_id):
         self.get_user_by_id(user_id)  # fail if user does not exist
         self.delete_history_by_user_id(user_id)
-        with self._lock, self.connection as conn:
+        with self.connection as conn:
             botdb = conn.cursor()
             botdb.execute("DELETE FROM users WHERE id = %s", (user_id,))
 
     def delete_history_by_user_id(self, user_id):
-        with self._lock, self.connection as conn:
+        with self.connection as conn:
             botdb = conn.cursor()
             botdb.execute("DELETE FROM history WHERE user_id = %s", (user_id,))
 
