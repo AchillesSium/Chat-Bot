@@ -10,4 +10,4 @@ install:
   - python -m nltk.downloader stopwords
 # command to run tests
 script:
-  - pytest --cov=bot
+  - pytest --cov=bot -v
