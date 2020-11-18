@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from bot.data_api.datasource import Datasource
 from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
-from bot.chatBotDatabase import BotDatabase, User, HistoryEntry
+from bot.chatBotDatabase import IBotDatabase, User, HistoryEntry, get_database_object
 
 
 BotReply = Dict[str, Any]
@@ -48,11 +48,11 @@ class Bot:
         send_message: Callable[[str, dict], bool],
         check_schedule: str,
         message_interval: int,
-        user_db: Optional[BotDatabase] = None,
+        user_db: Optional[IBotDatabase] = None,
         data_source: Optional[Datasource] = None,
     ):
         self.send_message = send_message
-        self.user_db: BotDatabase = user_db or BotDatabase(":memory:")
+        self.user_db: IBotDatabase = user_db or get_database_object()
         self.data_source: Datasource = data_source or Datasource()
         self.recommender = SkillRecommenderCF(self.data_source)
 
