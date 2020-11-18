@@ -5,12 +5,14 @@ from slack.errors import SlackApiError
 from slack.signature import SignatureVerifier
 from slackeventsapi import SlackEventAdapter
 
+import atexit
 import json
 import os
 
 from dotenv import load_dotenv, find_dotenv
 
 from .bot import Bot
+from .chatBotDatabase import get_database_object
 
 # Get the tokens from .env file (.env.sample in version control)
 # Use load_dotenv to enable overwriting the values from system environment
@@ -54,7 +56,21 @@ def send_message(user_id, message):
 CRON = ENV["BOT_CHECK_SCHEDULE"]
 INTERVAL = int(ENV["BOT_DAYS_BETWEEN_MESSAGES"])
 
-bot = Bot(send_message=send_message, check_schedule=CRON, message_interval=INTERVAL)
+DB_TYPE = ENV["DB_TYPE"]
+DB_PARAMETERS = {
+    "postgres_connection_string": ENV["POSTGRES_CONN_STRING"],
+    "sqlite_db_file": ENV["SQLITE_DB_FILE"],
+}
+
+bot_db = get_database_object(DB_TYPE, DB_PARAMETERS)
+atexit.register(bot_db.close)
+
+bot = Bot(
+    send_message=send_message,
+    check_schedule=CRON,
+    message_interval=INTERVAL,
+    user_db=bot_db,
+)
 
 
 @app.route("/slack/events/interact", methods=["POST"])
@@ -118,6 +134,25 @@ def interaction():
             nb_already_suggested,
             already_selected=selected_skills,
             message_id=message_id,
+        )
+
+        slack_client.chat_update(
+            channel=channel, ts=og_timestamp, **formatted_suggestions
+        )
+
+    elif action_dict["action_id"] == "show_more_candidates":
+        og_timestamp = json_form["container"]["message_ts"]
+        channel = json_form["channel"]["id"]
+        nb_already_suggested, query_skills, query_year, query_week = action_dict[
+            "value"
+        ].split("_")
+        nb_already_suggested = int(nb_already_suggested)
+        query_skills = query_skills.split(",")
+        query_year = int(query_year)
+        query_week = int(query_week)
+
+        formatted_suggestions = bot.show_more_candidates(
+            (query_skills, query_year, query_week), nb_already_suggested
         )
 
         slack_client.chat_update(
