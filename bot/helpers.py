@@ -63,3 +63,18 @@ class YearWeek(namedtuple("_", ("year", "week"))):
         while True:
             yield self
             self = self.next_week()
+
+
+def debug_printer(item="Nothing was given to log.", sign="#"):
+    """
+    This function is for debugging purposes.
+    :param item: item or message to be printed.
+    :param sign: The character or string with which the message in this instance is highlighted.
+    :return: None
+    """
+    print()
+    print(sign * 6)
+    print(sign * 6)
+    print(item)
+    print(sign * 6)
+    print(sign * 6)
