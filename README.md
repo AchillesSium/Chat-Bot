@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/Tuni-Software-Project-Course-G12/Conversational-bot.svg?token=gsA68ShFu5CfzfyzowMw&branch=master)](https://travis-ci.com/Tuni-Software-Project-Course-G12/Conversational-bot)
+
 # Conversational-bot
 
 
