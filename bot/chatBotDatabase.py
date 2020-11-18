@@ -142,7 +142,9 @@ class SQLiteBotDatabase(IBotDatabase):
             botdb.execute("DELETE FROM history WHERE user_id = (?)", (user_id,))
 
     def close(self):
-        self.connection.close()
+        if self.connection:
+            self.connection.close()
+            self.connection = None
 
 
 class PostgresBotDatabase(IBotDatabase):
@@ -153,7 +155,7 @@ class PostgresBotDatabase(IBotDatabase):
         self._create_tables()
 
     def __del__(self):
-        self.connection.close()
+        self.close()
 
     def _create_tables(self):
         with self._lock, self.connection as conn:
@@ -241,7 +243,9 @@ class PostgresBotDatabase(IBotDatabase):
             botdb.execute("DELETE FROM history WHERE user_id = %s", (user_id,))
 
     def close(self):
-        self.connection.close()
+        if self.connection:
+            self.connection.close()
+            self.connection = None
 
 
 def get_database_object(

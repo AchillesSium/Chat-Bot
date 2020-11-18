@@ -5,6 +5,7 @@ from slack.errors import SlackApiError
 from slack.signature import SignatureVerifier
 from slackeventsapi import SlackEventAdapter
 
+import atexit
 import json
 import os
 
@@ -61,11 +62,14 @@ DB_PARAMETERS = {
     "sqlite_db_file": ENV["SQLITE_DB_FILE"],
 }
 
+bot_db = get_database_object(DB_TYPE, DB_PARAMETERS)
+atexit.register(bot_db.close)
+
 bot = Bot(
     send_message=send_message,
     check_schedule=CRON,
     message_interval=INTERVAL,
-    user_db=get_database_object(DB_TYPE, DB_PARAMETERS),
+    user_db=bot_db,
 )
 
 
