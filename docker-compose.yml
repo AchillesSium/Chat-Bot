@@ -9,4 +9,4 @@ services:
       context: .
     ports:
       - "3000:${PORT}"
-    command: ["uwsgi", "--http", ":${PORT}", "--enable-threads", "--module", "bot.app:app"]
+    command: ["uwsgi", "--uid=uwsgi", "--gid=uwsgi", "--http", ":${PORT}", "--enable-threads", "--module", "bot.app:app"]
