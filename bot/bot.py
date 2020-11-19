@@ -181,7 +181,9 @@ class Bot:
         if not people:
             return {"text": "I could not find anyone available with those skills"}
         else:
-            return self._format_candidate_suggestions(people[:5], (skills, year, week))
+            return self._format_candidate_suggestions(
+                people[:5], (skills, start_week.year, start_week.week)
+            )
 
     def _format_candidate_suggestions(
         self,
@@ -264,12 +266,25 @@ class Bot:
         :param increment_by: How many more to suggest
         :return: Recommendation message
         """
-        # TODO: find the actual free people with the skills, starting from (year, week)
-        people = [(321, ("js",), ((43, 0.0), (44, 0.4)))] * (
-            nb_already_suggested + increment_by
+        people = find_person_by_skills(
+            query[0],
+            self.data_source.get_users(),
+            self.data_source.get_allocations(),
+            f"{query[1]}-W{query[2]}",
         )
 
-        return self._format_candidate_suggestions(people, query)
+        nb_to_show = nb_already_suggested + increment_by
+        if len(people) <= nb_to_show:
+            all_shown = True
+        else:
+            all_shown = False
+
+        if all_shown:
+            return self._format_candidate_suggestions(
+                people, query, max_suggestions=len(people)
+            )
+        else:
+            return self._format_candidate_suggestions(people[:nb_to_show], query)
 
     def skills_command(self, user_id: str, _message: str, _match) -> BotReply:
         rec = self._recommendations_for(user_id=user_id)
