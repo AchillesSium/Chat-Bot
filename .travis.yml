@@ -1,0 +1,13 @@
+language: python
+python:
+  - "3.8"
+# command to install dependencies
+install:
+  - pip install -r requirements.txt
+  - pip install pytest-cov
+  - python -m nltk.downloader punkt
+  - python -m nltk.downloader averaged_perceptron_tagger
+  - python -m nltk.downloader stopwords
+# command to run tests
+script:
+  - pytest --cov=bot -v
