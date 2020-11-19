@@ -101,10 +101,6 @@ def add_person_in_order(people: List, new_person: Tuple) -> List:
                 people.insert(i, new_person)
                 was_added = True
                 break  # After insertion, there is no need to loop through the list.
-        else:
-            # NOTE: this block might or might not be necessary.
-            people.insert(i, new_person)
-            break  # After insertion, there is no need to loop through the list.
     if not was_added:
         # Person could not be added during the loop, so they will be added to the end of the list.
         people.append(new_person)
