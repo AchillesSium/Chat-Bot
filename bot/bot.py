@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from bot.data_api.datasource import Datasource
 from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
-from bot.chatBotDatabase import IBotDatabase, User, HistoryEntry, get_database_object
+from bot.chatBotDatabase import IBotDatabase, User, HistoryEntry
 
 
 BotReply = Dict[str, Any]
@@ -48,11 +48,11 @@ class Bot:
         send_message: Callable[[str, dict], bool],
         check_schedule: str,
         message_interval: int,
-        user_db: Optional[IBotDatabase] = None,
+        user_db: IBotDatabase,
         data_source: Optional[Datasource] = None,
     ):
         self.send_message = send_message
-        self.user_db: IBotDatabase = user_db or get_database_object()
+        self.user_db: IBotDatabase = user_db
         self.data_source: Datasource = data_source or Datasource()
         self.recommender = SkillRecommenderCF(self.data_source)
 
@@ -308,7 +308,7 @@ class Bot:
         *,
         user_id: str = None,
         employee_id: int = None,
-        limit: Optional[int] = 4,
+        limit: int = 4,
         history: Iterable[HistoryEntry] = None,
     ):
         """Return list of recommendations for user.
