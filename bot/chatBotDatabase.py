@@ -246,47 +246,28 @@ class PostgresBotDatabase(IBotDatabase):
             self.connection = None
 
 
-def get_database_object(
-    db_type: Optional[str] = None, parameters: Optional[Dict[str, str]] = None
-) -> IBotDatabase:
+def get_database_object(db_type: str, connection_string: str) -> IBotDatabase:
     """ Get the correct database object with the given type and parameters
 
-    Parameters for sqlite database should contain the key "sqlite_db_file".
-        E.g. {"sqlite_db_file": ":memory:"}
+    Connection string for sqlite database should be the database file,
+    or ":memory:" for in memory database.
 
-    Parameters for postgres database should contain the key "postgres_connection_string".
-        E.g. {"postgres_connection_string": "dbname=chatbotdb user=postgres password=postgres"}
+    Connection string for postgres database should contain necessary parameters.
+        E.g. "host=db dbname=chatbotdb user=postgres password=postgres"
 
-    :param db_type: Postgre or sqlite
-    :param parameters: Connection parameters.
+    :param db_type: postgre or sqlite
+    :param connection_string: Connection parameters.
     :return: Database object
     """
-    if db_type is None:
-        db_type = "sqlite"
-
-    if parameters is None:
-        parameters = {
-            "sqlite_db_file": ":memory:",
-            "postgres_connection_string": "dbname=chatbotdb user=postgres password=postgres",
-        }
-
     db_type = db_type.lower()
 
     db_dict = {
-        "postgre": lambda: PostgresBotDatabase(
-            parameters["postgres_connection_string"]
-        ),
-        "sqlite": lambda: SQLiteBotDatabase(parameters["sqlite_db_file"]),
+        "postgre": PostgresBotDatabase,
+        "sqlite": SQLiteBotDatabase,
     }
 
-    for t, db_lambda in db_dict.items():
+    for t, db_class in db_dict.items():
         if db_type.startswith(t):
-            db = db_lambda()
-            break
-    else:
-        # I think this is better than a default db_type
-        raise AttributeError(
-            f"Unknown database type {db_type}.\nKnown types: postgre, sqlite"
-        )
+            return db_class(connection_string)
 
-    return db
+    raise ValueError(f"Unknown database type {db_type}.\nKnown types: postgre, sqlite")
