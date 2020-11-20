@@ -11,8 +11,8 @@ import os
 
 from dotenv import load_dotenv, find_dotenv
 
-from .bot import Bot
-from .chatBotDatabase import get_database_object
+from bot.bot import Bot
+from bot.chatBotDatabase import get_database_object
 
 # Get the tokens from .env file (.env.sample in version control)
 # Use load_dotenv to enable overwriting the values from system environment

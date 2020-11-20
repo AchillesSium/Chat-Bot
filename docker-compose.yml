@@ -1,0 +1,10 @@
+version: "3"
+
+services:
+  bot:
+    build:
+      dockerfile: Dockerfile
+      context: .
+    ports:
+      - "${PORT}:${PORT}"
+    command: ["uwsgi", "--uid=uwsgi", "--gid=uwsgi", "--http", ":${PORT}", "--enable-threads", "--module", "bot.app:app"]
