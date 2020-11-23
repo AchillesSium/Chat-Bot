@@ -2,11 +2,12 @@ import requests
 
 
 class Datasource:
-    def __init__(self, api_base_url):
+    def __init__(self, api_base_url, api_key):
         self.base_url = api_base_url
+        self.headers = {"x-api-key": api_key}
 
     def _get(self, route):
-        res = requests.get(self.base_url + route)
+        res = requests.get(self.base_url + route, headers=self.headers)
         return res.json()
 
     def user_info(self, user_id):

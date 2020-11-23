@@ -52,7 +52,15 @@ from datasource import Datasource
 
 source = Datasource()
 
+
 app = Flask(__name__)
+
+
+@app.before_request
+def require_api_key():
+    print("key:", request.headers.get("x-api-key"))
+    if request.headers.get("x-api-key") != "open sesame":
+        return "You shall not pass", 401
 
 
 @app.route("/user/<int:user_id>")
