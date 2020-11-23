@@ -3,9 +3,7 @@ from bot.chatBotDatabase import get_database_object, User
 
 def get_sqlite(in_memory: bool):
     db_name = ":memory:" if in_memory else "db_name.db"
-    params = {"sqlite_db_file": db_name}
-
-    return get_database_object("sqlite", params)
+    return get_database_object("sqlite", db_name)
 
 
 def test_in_memory():
