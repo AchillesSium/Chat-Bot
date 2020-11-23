@@ -48,7 +48,7 @@ Allocation
 
 from flask import Flask, jsonify, request
 
-from .datasource import Datasource
+from datasource import Datasource
 
 source = Datasource()
 
@@ -71,7 +71,7 @@ def user_allocations(user_id):
     if data is None:
         return {}, 404
     return {
-        "employeeId": 1,
+        "employeeId": user_id,
         "allocations": data,
     }
 
@@ -104,7 +104,6 @@ def allocations():
 def example_user():
     return {
         "employeeId": 1,
-        # "slack_username": "@example_user",
         "role": "Developer (Example)",
         "skills": ["database", "internet explorer", "Web programming"],
         "wishes": [
