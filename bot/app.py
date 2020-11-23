@@ -13,6 +13,7 @@ from dotenv import load_dotenv, find_dotenv
 
 from bot.bot import Bot
 from bot.chatBotDatabase import get_database_object
+from bot.data_api.datasource import Datasource
 
 # Get the tokens from .env file (.env.sample in version control)
 # Use load_dotenv to enable overwriting the values from system environment
@@ -70,6 +71,7 @@ bot = Bot(
     check_schedule=CRON,
     message_interval=INTERVAL,
     user_db=bot_db,
+    data_source=Datasource(ENV["DATA_API_URL"], ENV["DATA_API_KEY"]),
 )
 
 

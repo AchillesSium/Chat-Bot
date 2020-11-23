@@ -48,12 +48,12 @@ class Bot:
         send_message: Callable[[str, dict], bool],
         check_schedule: str,
         message_interval: int,
-        user_db: Optional[IBotDatabase] = None,
-        data_source: Optional[Datasource] = None,
+        user_db: IBotDatabase,
+        data_source: Datasource,
     ):
         self.send_message = send_message
-        self.user_db: IBotDatabase = user_db or get_database_object()
-        self.data_source: Datasource = data_source or Datasource()
+        self.user_db: IBotDatabase = user_db
+        self.data_source: Datasource = data_source
         self.recommender = SkillRecommenderCF(self.data_source)
 
         self._message_interval = timedelta(days=message_interval)
