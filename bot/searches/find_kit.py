@@ -122,6 +122,9 @@ def sort_by_time(matching_people: List, allocations_dict: Dict, year_week: str) 
         # Cycle through all the people who were matched.
         alloc_list = []
         if person[0] in allocations_dict:
+            if year_week not in allocations_dict[person[0]]:
+                # If person has allocations, but not
+                None
             for allocation in allocations_dict[person[0]]:
                 # In the JSON structure of allocations, the base level units are divided
                 # into two entities: "user" and "projects"
@@ -138,7 +141,7 @@ def sort_by_time(matching_people: List, allocations_dict: Dict, year_week: str) 
                             break  # Ten entries is enough.
         else:
             # Subject had no allocations.
-            insort_left(alloc_list, (year_week, 0.0,))
+            insort_left(alloc_list, (year_week, 0.6,))
         # All allocations extracted for person
         if alloc_list:
             # Only persons for whom allocations were available.
