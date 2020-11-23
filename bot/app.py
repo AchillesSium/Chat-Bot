@@ -48,7 +48,7 @@ def send_message(user_id, message):
         result = slack_client.chat_postMessage(channel=channel_id, **message)
         result.validate()
     except SlackApiError as e:
-        print(repr(e))
+        app.logger.info(f"failed to send message: {e!r}")
         return False
     return True
 
@@ -78,7 +78,6 @@ def interaction():
     if not signature_verifier.is_valid_request(request.get_data(), request.headers):
         return make_response("invalid request", 403)
 
-    print(request.form)
     json_form = json.loads(request.form.get("payload"))
     user_id = json_form["user"]["id"]
     action_dict = json_form["actions"][0]
@@ -166,7 +165,6 @@ def interaction():
 def slash_commands():
     if not signature_verifier.is_valid_request(request.get_data(), request.headers):
         return make_response("invalid request", 403)
-    print(request.form)
     if command := request.form.get("command"):
         user_id = request.form["user_id"]
         return {
@@ -178,7 +176,6 @@ def slash_commands():
 
 @slack_events_adapter.on("message")
 def handle_direct_message(event_data):
-    print("message", event_data)
     message = event_data["event"]
     if (
         not message.get("bot_id")  # don't reply to bot's own messages
@@ -195,7 +192,6 @@ def handle_direct_message(event_data):
 
 @slack_events_adapter.on("app_mention")
 def handle_message(event_data):
-    print("mention", event_data)
     message = event_data["event"]
     if message.get("subtype") is None:
         command = message.get("text")
