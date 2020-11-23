@@ -7,8 +7,9 @@ def find_person_by_skills(
 ):
     """Look for people with a certain set of skills.
 
-    At the end of its run, this function invokes sort_by_time,
-    which sorts the matched people by time and discards unavailable people.
+    This function assembles a list of people with matching skills.
+    It then invokes sort_by_time, which sorts the matched people by time and discards unavailable people.
+    Finally, it sorts the the assembled list by their matching skills and available hours.
 
     :param skills: A list containing names of requested skills.
     :param users: User information output of the Data API.
@@ -37,6 +38,13 @@ def find_person_by_skills(
     if len(matching_people) != 0:
         # Check out the allocations for all found people.
         matching_people = sort_by_time(matching_people, allocations, year_week)
+    # Last phase, sorting people by amount of matching skills primarily
+    # and available working hours secondarily.
+    matching_people = sorted(
+        matching_people,
+        reverse=True,
+        key=lambda person: (len(person[1]), 1 - person[2][0][1]),
+    )
     return matching_people
 
 
@@ -123,8 +131,8 @@ def sort_by_time(matching_people: List, allocations_dict: Dict, year_week: str) 
         alloc_list = []
         if person[0] in allocations_dict:
             if year_week not in allocations_dict[person[0]]:
-                # If person has allocations, but not
-                None
+                # If person has allocations, but none at the requested week.
+                insort_left(alloc_list, (year_week, 0.0,))
             for allocation in allocations_dict[person[0]]:
                 # In the JSON structure of allocations, the base level units are divided
                 # into two entities: "user" and "projects"
@@ -141,7 +149,7 @@ def sort_by_time(matching_people: List, allocations_dict: Dict, year_week: str) 
                             break  # Ten entries is enough.
         else:
             # Subject had no allocations.
-            insort_left(alloc_list, (year_week, 0.6,))
+            insort_left(alloc_list, (year_week, 0.0,))
         # All allocations extracted for person
         if alloc_list:
             # Only persons for whom allocations were available.

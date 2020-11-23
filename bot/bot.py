@@ -10,7 +10,7 @@ from bot.data_api.datasource import Datasource
 from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
 
 from bot.chatBotDatabase import BotDatabase, User, HistoryEntry
-from bot.searches.find_kit import find_person_by_skills, sort_by_time
+from bot.searches.find_kit import find_person_by_skills
 
 from bot.helpers import YearWeek
 
