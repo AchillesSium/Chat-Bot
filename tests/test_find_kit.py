@@ -46,4 +46,5 @@ def test_person_with_100_percent_allocation_is_excluded(percentages):
     }
     users = sample_users_with(employee_id, skills)
     found = find_kit.find_person_by_skills(skills, users, allocation, SOME_WEEK)
-    assert not found
+    for _, _, allocations in found:
+        assert all(week != SOME_WEEK for week, _ in allocations)
