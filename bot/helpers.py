@@ -46,11 +46,14 @@ class YearWeek(namedtuple("_", ("year", "week"))):
             return False
         return True
 
+    def __add__(self, delta: timedelta) -> "YearWeek":
+        "Return the YearWeek delta from self"
+        t = datetime.fromisocalendar(*self, 1)
+        return self.from_datetime(t + delta)
+
     def next_week(self) -> "YearWeek":
         "Return the next YearWeek from self"
-        t = datetime.fromisocalendar(*self, 1)
-        t += timedelta(weeks=1)
-        return self.from_datetime(t)
+        return self + timedelta(weeks=1)
 
     def iter_weeks(self) -> Iterable["YearWeek"]:
         """ Yield next YearWeeks starting from self
