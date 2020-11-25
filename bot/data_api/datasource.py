@@ -8,7 +8,7 @@ class Datasource:
 
     def _get(self, route):
         res = requests.get(self.base_url + route, headers=self.headers)
-        return res.json()
+        return res.json() if res.ok else {}
 
     def user_info(self, user_id):
         """
@@ -20,6 +20,9 @@ class Datasource:
         }
         """
         return self._get(f"/user/{user_id}")
+
+    def all_users(self):
+        return {user["employeeId"]: user for user in self._get("/users")}
 
     def user_allocations(self, user_id):
         return self._get(f"/user/{user_id}/allocations")

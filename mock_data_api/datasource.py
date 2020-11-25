@@ -68,6 +68,9 @@ class Datasource:
     def user_allocations(self, user_id):
         return self.allocations.get(user_id)
 
+    def all_users(self):
+        return list(self.users.values())
+
     def skills_by_user(self):
         """returns dict: {employeeId: [str]}"""
         return {user: info["skills"] for user, info in self.users.items()}

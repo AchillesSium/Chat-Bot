@@ -11,6 +11,16 @@ Endpoints:
     "wishes": [str],
   }
 
+/users
+  [
+    {
+      "employeeId": int,
+      "role": str,
+      "skills": [str],
+      "wishes": [str],
+    }
+  ]
+
 /user/<id>/allocations
   {
     "employeeId": int,
@@ -70,6 +80,12 @@ def user(user_id):
     if data is None:
         return {}, 404
     return data
+
+
+@app.route("/users")
+def users():
+    "Return info of all user"
+    return jsonify(source.all_users())
 
 
 @app.route("/user/<int:user_id>/allocations")
