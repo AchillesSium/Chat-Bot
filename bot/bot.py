@@ -168,13 +168,10 @@ class Bot:
                 }
 
         skills = {s.strip() for s in skills.split(",")}
+        users = self.data_source.all_users()
+        allocations = self.data_source.allocations_within(start_week, None)
 
-        people = find_person_by_skills(
-            skills,
-            self.data_source.get_users(),
-            self.data_source.get_allocations(),
-            str(start_week),
-        )
+        people = find_person_by_skills(skills, users, allocations, str(start_week))
 
         if not people:
             return {"text": "I could not find anyone available with those skills"}

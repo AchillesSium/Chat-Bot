@@ -111,7 +111,7 @@ def skills():
 def allocations():
     start = request.args.get("start")
     end = request.args.get("end")
-    if start is None or end is None:
+    if start is None:
         return {"error": "missing parameters"}, 400
     try:
         data = source.allocations_within(start, end)

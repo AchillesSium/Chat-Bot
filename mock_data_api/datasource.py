@@ -75,12 +75,19 @@ class Datasource:
         """returns dict: {employeeId: [str]}"""
         return {user: info["skills"] for user, info in self.users.items()}
 
-    def allocations_within(self, start, end):
-        if start > end:
+    def allocations_within(self, start, end=None):
+        if end and start > end:
             return []
 
-        def in_range(allocation):
-            return start <= allocation["yearWeek"] <= end
+        if end:
+
+            def in_range(allocation):
+                return start <= allocation["yearWeek"] <= end
+
+        else:
+
+            def in_range(allocation):
+                return start <= allocation["yearWeek"]
 
         result = []
         for user, allocations in self.allocations.items():
