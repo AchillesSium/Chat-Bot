@@ -6,8 +6,8 @@ class Datasource:
         self.base_url = api_base_url
         self.headers = {"x-api-key": api_key}
 
-    def _get(self, route):
-        res = requests.get(self.base_url + route, headers=self.headers)
+    def _get(self, route, params=None):
+        res = requests.get(self.base_url + route, params, headers=self.headers)
         return res.json() if res.ok else {}
 
     def user_info(self, user_id):
@@ -32,4 +32,7 @@ class Datasource:
         return {info["employeeId"]: info["skills"] for info in self._get("/skills")}
 
     def allocations_within(self, start, end):
-        return self._get("/allocations", {"start": start, "end": end}).get("users")
+        data = self._get("/allocations", {"start": start, "end": end})
+        return {
+            entry["employeeId"]: entry["allocations"] for entry in data.get("users", ())
+        }
