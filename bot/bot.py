@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 from bot.data_api.datasource import Datasource
 from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
 from bot.chatBotDatabase import IBotDatabase, User, HistoryEntry, get_database_object
+from bot.searches.find_kit import find_person_by_skills
+from bot.helpers import YearWeek
 
 
 BotReply = Dict[str, Any]
@@ -151,29 +153,35 @@ class Bot:
 
     def find_candidates(self, _user_id: str, _message: str, match: re.Match):
         "Find candidate employees who have particular skills"
+        start_week = YearWeek.now()
 
-        year, current_week, _ = datetime.now().isocalendar()
+        requested_week, skills = match.groups()
+        if requested_week:
+            y, w = start_week
+            week = int(requested_week[1:])
+            if week < w:
+                y += 1
+            start_week = YearWeek(y, week)
+            if not start_week.valid():
+                return {
+                    "text": f"The requested week ({requested_week.strip()}) is not valid"
+                }
 
-        starting_week, skills = match.groups()
-        if starting_week:
-            week = int(starting_week[1:])
-            if week < current_week:
-                year += 1
-        else:
-            week = current_week
+        skills = {s.strip() for s in skills.split(",")}
 
-        skills = {s.strip().lower() for s in skills.split(",")}
-
-        # TODO: find the actual free people with the skills, starting from (year, week)
-        people = [
-            (123, ("js", "angular"), ((42, 0.8), (43, 0.8), (44, 0.2))),
-            (321, ("js",), ((43, 0.0), (44, 0.4))),
-        ]
+        people = find_person_by_skills(
+            skills,
+            self.data_source.get_users(),
+            self.data_source.get_allocations(),
+            str(start_week),
+        )
 
         if not people:
             return {"text": "I could not find anyone available with those skills"}
         else:
-            return self._format_candidate_suggestions(people[:5], (skills, year, week))
+            return self._format_candidate_suggestions(
+                people[:5], (skills, start_week.year, start_week.week)
+            )
 
     def _format_candidate_suggestions(
         self,
@@ -210,13 +218,14 @@ class Bot:
 
         for employee_id, skill, availability in candidate_list:
             skill_str = ", ".join(skill)
-            avail = ", ".join(f"week {w}: {round(100*(1-p))}%" for w, p in availability)
+            w, p = availability[0]
+            avail = f"{w}, {round(100*(1-p))}%"
             blocks.append(
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*{employee_id}*\n\twith skills: {skill_str}\n\tavailable: {avail}",
+                        "text": f"*{employee_id}*\n\twith skills: {skill_str}\n\tavailable next: {avail}",
                     },
                 }
             )
@@ -255,12 +264,25 @@ class Bot:
         :param increment_by: How many more to suggest
         :return: Recommendation message
         """
-        # TODO: find the actual free people with the skills, starting from (year, week)
-        people = [(321, ("js",), ((43, 0.0), (44, 0.4)))] * (
-            nb_already_suggested + increment_by
+        people = find_person_by_skills(
+            query[0],
+            self.data_source.get_users(),
+            self.data_source.get_allocations(),
+            f"{query[1]}-W{query[2]}",
         )
 
-        return self._format_candidate_suggestions(people, query)
+        nb_to_show = nb_already_suggested + increment_by
+        if len(people) <= nb_to_show:
+            all_shown = True
+        else:
+            all_shown = False
+
+        if all_shown:
+            return self._format_candidate_suggestions(
+                people, query, max_suggestions=len(people)
+            )
+        else:
+            return self._format_candidate_suggestions(people[:nb_to_show], query)
 
     def skills_command(self, user_id: str, _message: str, _match) -> BotReply:
         rec = self._recommendations_for(user_id=user_id)

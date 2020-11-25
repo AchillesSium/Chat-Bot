@@ -6,3 +6,5 @@ venv/
 
 people-simple.json
 allocation.json
+
+ngrok.exe
