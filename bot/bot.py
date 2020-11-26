@@ -6,7 +6,7 @@ import re
 from time import time
 from datetime import datetime, timedelta
 
-from bot.data_api.datasource import Datasource
+from bot.data_api.datasource import Datasource, Timeout
 from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
 from bot.chatBotDatabase import IBotDatabase, User, HistoryEntry, get_database_object
 from bot.searches.find_kit import find_person_by_skills
@@ -148,7 +148,12 @@ class Bot:
             if match := command.match(message):
                 if command.requires_signup and not signed_up:
                     break
-                return command.action(user_id, message, match)
+                try:
+                    return command.action(user_id, message, match)
+                except Timeout:
+                    return {
+                        "text": "Sorry, I'm having some connection issues right now"
+                    }
         return self.help()
 
     def find_candidates(self, _user_id: str, _message: str, match: re.Match):
