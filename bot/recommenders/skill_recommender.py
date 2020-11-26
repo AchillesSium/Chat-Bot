@@ -709,7 +709,9 @@ if __name__ == "__main__":
         )
 
     # For debugging
-    rec = SkillRecommenderCF()
+    # assuming mock api is running on localhost
+    ds = Datasource("http://localhost", "open sesame")
+    rec = SkillRecommenderCF(ds)
     # user_id = 775
     user_id = 759
     sep = "\n" + 100 * "=" + "\n"
