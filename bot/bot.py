@@ -261,12 +261,10 @@ class Bot:
         :param increment_by: How many more to suggest
         :return: Recommendation message
         """
-        people = find_person_by_skills(
-            query[0],
-            self.data_source.get_users(),
-            self.data_source.get_allocations(),
-            f"{query[1]}-W{query[2]}",
-        )
+        start_week = YearWeek(query[1], query[2])
+        users = self.data_source.all_users()
+        allocations = self.data_source.allocations_within(start_week, None)
+        people = find_person_by_skills(query[0], users, allocations, str(start_week))
 
         nb_to_show = nb_already_suggested + increment_by
         if len(people) <= nb_to_show:

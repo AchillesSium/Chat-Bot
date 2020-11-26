@@ -428,11 +428,8 @@ class SimilarityClac:
 
 
 class SkillRecommenderCF:
-    def __init__(self, ds: Optional[Datasource] = None):
-        if ds is not None:
-            self.ds = ds
-        else:
-            self.ds = Datasource()
+    def __init__(self, ds: Datasource):
+        self.ds = ds
 
         self.initialize_recommender()
 
