@@ -49,12 +49,6 @@ class Datasource:
     def all_users(self):
         return {user["employeeId"]: user for user in self._get("/users")}
 
-    def user_allocations(self, user_id):
-        try:
-            return self._get(f"/user/{user_id}/allocations")
-        except NotFound:
-            return None
-
     def skills_by_user(self):
         """returns dict: {employeeId: [str]}"""
         return {info["employeeId"]: info["skills"] for info in self._get("/skills")}

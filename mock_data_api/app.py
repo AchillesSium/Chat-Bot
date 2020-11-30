@@ -21,12 +21,6 @@ Endpoints:
     }
   ]
 
-/user/<id>/allocations
-  {
-    "employeeId": int,
-    "allocations": [Allocation],
-  }
-
 /allocations?start=<YearWeek>&end=<YearWeek>
   {
     "startYearWeek": str,
@@ -86,18 +80,6 @@ def user(user_id):
 def users():
     "Return info of all user"
     return jsonify(source.all_users())
-
-
-@app.route("/user/<int:user_id>/allocations")
-def user_allocations(user_id):
-    "Return allocation of the user"
-    data = source.user_allocations(user_id)
-    if data is None:
-        return {}, 404
-    return {
-        "employeeId": user_id,
-        "allocations": data,
-    }
 
 
 @app.route("/skills")

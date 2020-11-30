@@ -65,9 +65,6 @@ class Datasource:
         """
         return self.users.get(user_id)
 
-    def user_allocations(self, user_id):
-        return self.allocations.get(user_id)
-
     def all_users(self):
         return list(self.users.values())
 
