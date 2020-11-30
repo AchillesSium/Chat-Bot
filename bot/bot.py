@@ -7,8 +7,8 @@ from time import time
 from datetime import datetime, timedelta
 
 from bot.data_api.datasource import Datasource, Timeout
-from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
-from bot.chatBotDatabase import IBotDatabase, User, HistoryEntry, get_database_object
+from bot.recommenders.skill_recommender import SkillRecommenderCF
+from bot.chatBotDatabase import IBotDatabase, User, HistoryEntry
 from bot.searches.find_kit import find_person_by_skills
 from bot.helpers import YearWeek
 
