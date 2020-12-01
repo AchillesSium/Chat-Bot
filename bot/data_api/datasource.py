@@ -1,60 +1,36 @@
-from pathlib import Path
+from typing import Optional
 
-import json
+import requests
 
 from bot.helpers import YearWeek
 
-# the parent of the git repository's root
-DATA_DIR = Path(__file__).resolve(strict=True).parent.parent.parent.parent
-PEOPLE_FILE = DATA_DIR / "people-simple.json"
-ALLOCATION_FILE = DATA_DIR / "allocation.json"
+
+Timeout = requests.Timeout
 
 
-def parse_users(path: Path):
-    """ Parse user data json to json.
-    Assumes the data file to be as given by customer, i.e. unmodified.
-    That is,
-
-    @param path: User data file path
-    @return: User data as JSON
-    """
-    users = {}
-    with path.open(encoding="utf-8") as f:
-        user_dict = ""
-        for line in f:
-            if line.startswith("}"):
-                user_dict += "}"
-                user = json.loads(user_dict)
-                users[user["employeeId"]] = user
-                user_dict = ""
-            else:
-                user_dict += line
-    return users
+class AccessDenied(Exception):
+    pass
 
 
-def parse_allocations(path: Path):
-    # assuming one array
-    with path.open() as f:
-        raw = json.load(f)
-    result = {}
-    keys = ("id", "yearWeek", "percentage")
-    for user in raw:
-        user_id = user["user"]["employeeId"]
-        allocations = []
-        for project in user.get("projects", ()):
-            allocations.extend(
-                {key: alloc[key] for key in keys}
-                for alloc in project.get("allocations", ())
-            )
-        allocations.sort(key=lambda item: item["yearWeek"])
-        result[user_id] = allocations
-    return result
+class NotFound(Exception):
+    pass
 
 
 class Datasource:
-    def __init__(self):
-        self.users = parse_users(PEOPLE_FILE)
-        self.allocations = parse_allocations(ALLOCATION_FILE)
+    def __init__(self, api_base_url, api_key):
+        self.base_url = api_base_url
+        self.headers = {"x-api-key": api_key}
+
+    def _get(self, route, params=None):
+        url = self.base_url + route
+        res = requests.get(url, params, headers=self.headers, timeout=5)
+        if res.ok:
+            return res.json()
+        if res.status_code in (requests.codes.unauthorized, requests.codes.forbidden):
+            raise AccessDenied(url, res.status_code)
+        elif res.status_code == request.codes.not_found:
+            raise NotFound(url)
+        return {}
 
     def user_info(self, user_id):
         """
@@ -65,43 +41,23 @@ class Datasource:
             "wishes": [str],
         }
         """
-        return self.users.get(user_id)
+        try:
+            return self._get(f"/user/{user_id}")
+        except NotFound:
+            return None
 
-    def user_allocations(self, user_id):
-        return self.allocations.get(user_id)
+    def all_users(self):
+        return {user["employeeId"]: user for user in self._get("/users")}
 
     def skills_by_user(self):
         """returns dict: {employeeId: [str]}"""
-        return {user: info["skills"] for user, info in self.users.items()}
+        return {info["employeeId"]: info["skills"] for info in self._get("/skills")}
 
-    def allocations_within(self, start, end):
-        start = YearWeek.from_string(start)
-        end = YearWeek.from_string(end)
-
-        if start > end:
-            return []
-
-        def in_range(allocation):
-            return start <= YearWeek.from_string(allocation["yearWeek"]) <= end
-
-        result = []
-        for user, allocations in self.allocations.items():
-            matching = list(filter(in_range, allocations))
-            if matching:
-                result.append(
-                    {"employeeId": user, "allocations": matching,}
-                )
-        return result
-
-    def get_users(self) -> dict:
-        return self.users
-
-    def get_allocations(self) -> dict:
-        return self.allocations
-
-
-if __name__ == "__main__":
-    # For debugging
-    ds = Datasource()
-
-    print("Breakpoint here")
+    def allocations_within(self, start: YearWeek, end: Optional[YearWeek]):
+        params = {"start": str(start)}
+        if end:
+            params["end"] = str(end)
+        data = self._get("/allocations", params)
+        return {
+            entry["employeeId"]: entry["allocations"] for entry in data.get("users", ())
+        }

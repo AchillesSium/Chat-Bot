@@ -6,9 +6,9 @@ import re
 from time import time
 from datetime import datetime, timedelta
 
-from bot.data_api.datasource import Datasource
-from bot.recommenders.skill_recommender import SkillRecommendation, SkillRecommenderCF
-from bot.chatBotDatabase import IBotDatabase, User, HistoryEntry, get_database_object
+from bot.data_api.datasource import Datasource, Timeout
+from bot.recommenders.skill_recommender import SkillRecommenderCF
+from bot.chatBotDatabase import IBotDatabase, User, HistoryEntry
 from bot.searches.find_kit import find_person_by_skills
 from bot.helpers import YearWeek
 
@@ -50,12 +50,12 @@ class Bot:
         send_message: Callable[[str, dict], bool],
         check_schedule: str,
         message_interval: int,
-        user_db: Optional[IBotDatabase] = None,
-        data_source: Optional[Datasource] = None,
+        user_db: IBotDatabase,
+        data_source: Datasource,
     ):
         self.send_message = send_message
-        self.user_db: IBotDatabase = user_db or get_database_object()
-        self.data_source: Datasource = data_source or Datasource()
+        self.user_db: IBotDatabase = user_db
+        self.data_source: Datasource = data_source
         self.recommender = SkillRecommenderCF(self.data_source)
 
         self._message_interval = timedelta(days=message_interval)
@@ -148,7 +148,12 @@ class Bot:
             if match := command.match(message):
                 if command.requires_signup and not signed_up:
                     break
-                return command.action(user_id, message, match)
+                try:
+                    return command.action(user_id, message, match)
+                except Timeout:
+                    return {
+                        "text": "Sorry, I'm having some connection issues right now"
+                    }
         return self.help()
 
     def find_candidates(self, _user_id: str, _message: str, match: re.Match):
@@ -168,13 +173,10 @@ class Bot:
                 }
 
         skills = {s.strip() for s in skills.split(",")}
+        users = self.data_source.all_users()
+        allocations = self.data_source.allocations_within(start_week, None)
 
-        people = find_person_by_skills(
-            skills,
-            self.data_source.get_users(),
-            self.data_source.get_allocations(),
-            str(start_week),
-        )
+        people = find_person_by_skills(skills, users, allocations, str(start_week))
 
         if not people:
             return {"text": "I could not find anyone available with those skills"}
@@ -264,12 +266,10 @@ class Bot:
         :param increment_by: How many more to suggest
         :return: Recommendation message
         """
-        people = find_person_by_skills(
-            query[0],
-            self.data_source.get_users(),
-            self.data_source.get_allocations(),
-            f"{query[1]}-W{query[2]}",
-        )
+        start_week = YearWeek(query[1], query[2])
+        users = self.data_source.all_users()
+        allocations = self.data_source.allocations_within(start_week, None)
+        people = find_person_by_skills(query[0], users, allocations, str(start_week))
 
         nb_to_show = nb_already_suggested + increment_by
         if len(people) <= nb_to_show:

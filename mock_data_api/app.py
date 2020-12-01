@@ -11,11 +11,15 @@ Endpoints:
     "wishes": [str],
   }
 
-/user/<id>/allocations
-  {
-    "employeeId": int,
-    "allocations": [Allocation],
-  }
+/users
+  [
+    {
+      "employeeId": int,
+      "role": str,
+      "skills": [str],
+      "wishes": [str],
+    }
+  ]
 
 /allocations?start=<YearWeek>&end=<YearWeek>
   {
@@ -48,11 +52,19 @@ Allocation
 
 from flask import Flask, jsonify, request
 
-from .datasource import Datasource
+from datasource import Datasource
 
 source = Datasource()
 
+
 app = Flask(__name__)
+
+
+@app.before_request
+def require_api_key():
+    print("key:", request.headers.get("x-api-key"))
+    if request.headers.get("x-api-key") != "open sesame":
+        return "You shall not pass", 401
 
 
 @app.route("/user/<int:user_id>")
@@ -64,16 +76,10 @@ def user(user_id):
     return data
 
 
-@app.route("/user/<int:user_id>/allocations")
-def user_allocations(user_id):
-    "Return allocation of the user"
-    data = source.user_allocations(user_id)
-    if data is None:
-        return {}, 404
-    return {
-        "employeeId": 1,
-        "allocations": data,
-    }
+@app.route("/users")
+def users():
+    "Return info of all user"
+    return jsonify(source.all_users())
 
 
 @app.route("/skills")
@@ -87,7 +93,7 @@ def skills():
 def allocations():
     start = request.args.get("start")
     end = request.args.get("end")
-    if start is None or end is None:
+    if start is None:
         return {"error": "missing parameters"}, 400
     try:
         data = source.allocations_within(start, end)
@@ -104,7 +110,6 @@ def allocations():
 def example_user():
     return {
         "employeeId": 1,
-        # "slack_username": "@example_user",
         "role": "Developer (Example)",
         "skills": ["database", "internet explorer", "Web programming"],
         "wishes": [
@@ -151,4 +156,4 @@ def example_allocations():
 
 
 if __name__ == "__main__":
-    app.run()
+    app.run(host="0.0.0.0", port=80)

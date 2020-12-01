@@ -8,3 +8,8 @@ services:
     ports:
       - "${PORT}:${PORT}"
     command: ["uwsgi", "--uid=uwsgi", "--gid=uwsgi", "--http", ":${PORT}", "--enable-threads", "--module", "bot.app:app"]
+
+  mock_data_api:
+    build:
+      context: "mock_data_api"
+    command: ["python", "-m", "app"]

@@ -428,11 +428,8 @@ class SimilarityClac:
 
 
 class SkillRecommenderCF:
-    def __init__(self, ds: Optional[Datasource] = None):
-        if ds is not None:
-            self.ds = ds
-        else:
-            self.ds = Datasource()
+    def __init__(self, ds: Datasource):
+        self.ds = ds
 
         self.initialize_recommender()
 
@@ -712,7 +709,9 @@ if __name__ == "__main__":
         )
 
     # For debugging
-    rec = SkillRecommenderCF()
+    # assuming mock api is running on localhost
+    ds = Datasource("http://localhost", "open sesame")
+    rec = SkillRecommenderCF(ds)
     # user_id = 775
     user_id = 759
     sep = "\n" + 100 * "=" + "\n"
