@@ -330,7 +330,7 @@ class Bot:
         *,
         user_id: str = None,
         employee_id: int = None,
-        limit: Optional[int] = 4,
+        limit: int = 4,
         history: Iterable[HistoryEntry] = None,
     ):
         """Return list of recommendations for user.

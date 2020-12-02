@@ -58,12 +58,9 @@ CRON = ENV["BOT_CHECK_SCHEDULE"]
 INTERVAL = int(ENV["BOT_DAYS_BETWEEN_MESSAGES"])
 
 DB_TYPE = ENV["DB_TYPE"]
-DB_PARAMETERS = {
-    "postgres_connection_string": ENV["POSTGRES_CONN_STRING"],
-    "sqlite_db_file": ENV["SQLITE_DB_FILE"],
-}
+DB_CONNECTION_STRING = ENV["DB_CONNECTION_STRING"]
 
-bot_db = get_database_object(DB_TYPE, DB_PARAMETERS)
+bot_db = get_database_object(DB_TYPE, DB_CONNECTION_STRING, retry_delays=(1, 2, 5))
 atexit.register(bot_db.close)
 
 bot = Bot(

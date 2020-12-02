@@ -2,12 +2,19 @@ version: "3"
 
 services:
   bot:
+    env_file:
+      - .env
     build:
       dockerfile: Dockerfile
       context: .
     ports:
       - "${PORT}:${PORT}"
     command: ["uwsgi", "--uid=uwsgi", "--gid=uwsgi", "--http", ":${PORT}", "--enable-threads", "--module", "bot.app:app"]
+
+  db:
+    env_file:
+      - .env
+    image: postgres
 
   mock_data_api:
     build:

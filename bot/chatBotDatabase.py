@@ -1,10 +1,11 @@
 import sqlite3
 import datetime
 import threading
+import time
 
 import psycopg2 as psy
 
-from typing import NamedTuple, Optional, List, Tuple, Dict
+from typing import NamedTuple, Optional, List, Tuple, Dict, Iterable
 
 
 class User(NamedTuple):
@@ -14,6 +15,10 @@ class User(NamedTuple):
 
 
 HistoryEntry = Tuple[str, datetime.datetime, str]
+
+
+class ConnectionError(Exception):
+    pass
 
 
 class IBotDatabase:
@@ -149,7 +154,11 @@ class SQLiteBotDatabase(IBotDatabase):
 
 class PostgresBotDatabase(IBotDatabase):
     def __init__(self, connection_string: str):
-        self.connection = psy.connect(connection_string)
+        try:
+            self.connection = psy.connect(connection_string)
+        except psy.OperationalError as e:
+            self.connection = None  # __del__ requires this attribute
+            raise ConnectionError(e) from None
         self._create_tables()
 
     def __del__(self):
@@ -247,46 +256,39 @@ class PostgresBotDatabase(IBotDatabase):
 
 
 def get_database_object(
-    db_type: Optional[str] = None, parameters: Optional[Dict[str, str]] = None
+    db_type: str, connection_string: str, *, retry_delays: Iterable[float] = ()
 ) -> IBotDatabase:
     """ Get the correct database object with the given type and parameters
 
-    Parameters for sqlite database should contain the key "sqlite_db_file".
-        E.g. {"sqlite_db_file": ":memory:"}
+    In case of ConnectionError in creating the database, the creation will be
+    retried after delay for each delay in retry_delays.
+    If all delays are used, the possible exception is propagated to caller.
 
-    Parameters for postgres database should contain the key "postgres_connection_string".
-        E.g. {"postgres_connection_string": "dbname=chatbotdb user=postgres password=postgres"}
+    Connection string for sqlite database should be the database file,
+    or ":memory:" for in memory database.
 
-    :param db_type: Postgre or sqlite
-    :param parameters: Connection parameters.
+    Connection string for postgres database should contain necessary parameters.
+        E.g. "host=db dbname=chatbotdb user=postgres password=postgres"
+
+    :param db_type: postgre or sqlite
+    :param connection_string: Connection parameters.
+    :param retry_delays: iterable of delay times in seconds between connection attempts
     :return: Database object
     """
-    if db_type is None:
-        db_type = "sqlite"
-
-    if parameters is None:
-        parameters = {
-            "sqlite_db_file": ":memory:",
-            "postgres_connection_string": "dbname=chatbotdb user=postgres password=postgres",
-        }
-
     db_type = db_type.lower()
 
     db_dict = {
-        "postgre": lambda: PostgresBotDatabase(
-            parameters["postgres_connection_string"]
-        ),
-        "sqlite": lambda: SQLiteBotDatabase(parameters["sqlite_db_file"]),
+        "postgre": PostgresBotDatabase,
+        "sqlite": SQLiteBotDatabase,
     }
 
-    for t, db_lambda in db_dict.items():
+    for t, db_class in db_dict.items():
         if db_type.startswith(t):
-            db = db_lambda()
-            break
-    else:
-        # I think this is better than a default db_type
-        raise AttributeError(
-            f"Unknown database type {db_type}.\nKnown types: postgre, sqlite"
-        )
+            for delay in retry_delays:
+                try:
+                    return db_class(connection_string)
+                except ConnectionError as e:
+                    time.sleep(delay)
+            return db_class(connection_string)
 
-    return db
+    raise ValueError(f"Unknown database type {db_type}.\nKnown types: postgre, sqlite")
