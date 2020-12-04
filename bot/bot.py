@@ -70,10 +70,10 @@ class Bot:
         self._commands = [
             Command(
                 "help",
-                matcher("help(?:\s+(?P<topic>\w+))?"),
+                matcher("help"),
                 self.help,
                 requires_signup=False,
-                help_text="help for the bot or a specific command, usage: `help [command]`",
+                help_text="help for the bot",
             ),
             Command(
                 "sign-up",
@@ -110,10 +110,8 @@ class Bot:
         ]
 
     def help(
-        self, _user_id: str = None, _message: str = None, match: re.Match = None
+        self, _user_id: str = None, _message: str = None, _match: re.Match = None
     ) -> BotReply:
-        if match and (topic := match.group("topic")):
-            return {"text": f"help for topic: {topic}"}
         return {
             "blocks": [
                 {
